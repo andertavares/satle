@@ -4,6 +4,8 @@ import gym
 from gym import spaces
 from pysat.formula import CNF
 
+from .util import unit_propagation
+
 
 class SATState:
     def __init__(self, formula, model):
