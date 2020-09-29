@@ -1,3 +1,6 @@
+from copy import copy
+from util import unit_propagation
+
 class SATState:
     def __init__(self, formula, model):
         """
