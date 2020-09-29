@@ -8,7 +8,7 @@ from itertools import compress
 
 def unit_propagation(formula, literal):
     """
-    Performs unit propagation of literal l in formula f.
+    Performs unit propagation of a literal in the formula.
     That is, removes all clauses with l and removes ~l from the clauses it occurs
     :param formula:
     :param literal:
@@ -40,40 +40,14 @@ class SATState:
         self.formula = formula.copy()
         self.model = copy(model)
 
-    def valid_actions(self, positives_only=True):
+    def valid_actions(self):
         """
         Returns the valid actions that can be performed in this state
         :return:
         """
         free_literals = [v for v in range(1, self.formula.nv + 1) if v not in self.model]
-        if positives_only:
-            return free_literals
-
         free_literals += [-v for v in range(1, self.formula.nv + 1) if v not in self.model]
         return free_literals
-
-    def apply_action(self, action):
-        """
-        Returns the two resulting states of applying action to the current state.
-        This corresponds to branching on the variable denoted by 'action'.
-        The resulting states correspond to the branch nodes resulting by branching on
-        asserted and negated action
-        :param action: int, denotes the variable to branch on
-        :return: tuple(SATState, SATState) containing the two resulting states
-        """
-        # creates two new models from the current model
-        m1, m2 = copy(self.model), copy(self.model)
-
-        # adds the asserted literal to m1 and the negated to m2
-        m1[abs(action)] = action
-        m2[abs(action)] = -action
-
-        # creates two formulas with the result of adding action to m1 and -action to m2
-        f1 = unit_propagation(self.formula, action)
-        f2 = unit_propagation(self.formula, -action)
-
-        # returns the two resulting states
-        return SATState(f1, m1), SATState(f2, m2)
 
     def terminal(self):
         """
