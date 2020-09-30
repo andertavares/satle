@@ -12,7 +12,7 @@ class SATState:
         """
         Creates a new state with a formula and a model (partial or full)
         :param formula: pysat.formula.CNF
-        :param model: dict with a partial or full assignment of values to variables
+        :param model: tuple with partial or full assignment to variables
         """
         self.formula = formula.copy()
         self.model = copy(model)

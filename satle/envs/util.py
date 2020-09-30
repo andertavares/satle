@@ -1,5 +1,26 @@
 from itertools import compress
 
+#TODO implement model as a tuple (-1,0,1) for false, free, sat, respectively
+
+def encode(formula, model):
+    """
+    Returns a representation of the formula + partial solution
+    :param formula:
+    :param model:
+    :return:
+    """
+    raise NotImplementedError
+
+
+def decode(adj_tensor, model):
+    """
+    Returns a list of clauses, given the adjacency tensor and model
+    :param adj_tensor:
+    :param model:
+    :return:
+    """
+    raise NotImplementedError
+
 
 def unit_propagation(formula, literal):
     """
