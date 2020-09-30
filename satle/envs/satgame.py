@@ -2,9 +2,10 @@ from copy import copy
 
 import gym
 from gym import spaces
+import numpy as np
 from pysat.formula import CNF
 
-from .util import unit_propagation
+from .util import unit_propagation, encode
 
 
 class SATState:
@@ -22,9 +23,10 @@ class SATState:
         Returns the valid actions that can be performed in this state
         :return:
         """
-        free_literals = [v for v in range(1, self.formula.nv + 1) if v not in self.model]
+        raise NotImplementedError
+        """free_literals = [v for v in range(1, self.formula.nv + 1) if v not in self.model]
         free_literals += [-v for v in range(1, self.formula.nv + 1) if v not in self.model]
-        return free_literals
+        return free_literals"""
 
     def terminal(self):
         """
@@ -59,15 +61,6 @@ class SATState:
         return -1
 
 
-def encode(formula):
-    """
-    TODO encodes a formula into a graph
-    :param formula:
-    :return:
-    """
-    raise NotImplementedError
-
-
 class SATEnv(gym.Env):
     """
     SAT gym environment. The goal is to find a solution to the
@@ -82,26 +75,53 @@ class SATEnv(gym.Env):
         :param formula: a satisfiable formula
         """
         super(SATEnv, self).__init__()
-        self.formula = CNF(from_file=formula)
-        self.state = SATState(self.formula, {})
+        self.formula = formula
+        self.state = SATState(self.formula, np.zeros(shape=(self.formula.nv, ), dtype=np.uint8))
 
         # literals is a list: [-nv,...,-1, +1, ..., nv] (without zero)
         self.literals = list(range(-self.formula.nv, 0)) + list(range(1, self.formula.nv+1))
-        # 2 actions per variable (use it asserted or negated)
+
+        # 2 actions per variable (asserted or negated)
         self.action_space = spaces.Discrete(2 * self.formula.nv)
 
-        # TODO: define the obs. space (see: https://github.com/openai/gym/tree/master/gym/spaces)
-        # use dict of MultiBinary for the bi-adjacency matrix? Selsam's? Cameron's?
-        self.observation_space = None
+        # obs space is a dict{'formula': adj_matrix, 'model': model}
+        # adj matrix is a vars x clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
+        # model contains 0,-1,+1 in each position if the corresponding variable is unassigned, negated, asserted
+        # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
+        self.observation_space = spaces.Dict({
+            'formula': spaces.Box(low=-1, high=1, shape=(self.formula.nv, len(self.formula.clauses)), dtype=np.uint8),
+            'model': spaces.Box(low=-1, high=1, shape=(self.formula.nv,), dtype=np.uint8)  # array with (partial) model
+        })
 
-    def get_literal(self, action):
+    def encode_action(self, dimacs_var, polarity):
         """
-        Translates an action into the corresponding literal,
-        i.e., from [0,..., 2* num_vars] to [-num_vars, ...,-1, +1,...,num_vars]
+        Returns an action in interval 0, 2*n_vars corresponding to the
+        variable in DIMACS notation with the given polarity
+        :param dimacs_var: variable in DIMACS notation (i.e. ranging from 1 to n_vars)
+        :param polarity: bool corresponding to the value the variable will take
+        :return:
+        """
+        # offsets by n_vars if polarity is positive, because the first 'n_vars' actions
+        # correspond to adding a negated variable to the solution
+        offset = self.formula.nv if polarity else 0
+
+        # subtracts 1 from dimacs_var to correct the first index (0 in array, 1 in dimacs)
+        return dimacs_var - 1 + offset
+
+
+
+
+    def var_and_polarity(self, action):
+        """
+        Translates an action into a tuple (var,polarity)
+        Where var is the variable index (from 0 to num_vars-1) and polarity is (+1 or -1)
+        meaning True or False, respectively
+
         :param action:
         :return:
         """
-        return self.literals[action]
+        lit = self.literals[action]  # translates from [0,..., 2*num_vars] to [-num_vars, ...,-1, +1,...,num_vars]
+        return abs(lit) - 1, +1 if lit > 0 else -1
 
     def step(self, action):
         """
@@ -111,32 +131,37 @@ class SATEnv(gym.Env):
         :param action:
         :return:
         """
-        lit = self.get_literal(action)
+
         new_model = copy(self.state.model)
 
         # adds the literal to the partial solution
-        new_model[abs(lit)] = lit
+        var, value = self.var_and_polarity(action)
+        new_model[var] = value
 
-        # creates two formulas with the result of adding action to m1 and -action to m2
-        new_formula = unit_propagation(self.formula, lit)
+        # creates new formula with the result of adding the corresponding literal to the previous
+        new_formula = unit_propagation(self.formula, self.literals[action])
 
         self.state = SATState(new_formula, new_model)
 
         # reward: 1, -1, 0 for sat, unsat, non-terminal, respectively
         reward = 1 if self.state.is_sat() else -1 if self.state.is_unsat() else 0
-        info = {'formula': self.state.formula, 'model': self.state.model}
-        return encode(self.state), reward, self.state.terminal(), info
+        obs = {'formula': encode(self.formula.nv, self.state.formula.clauses), 'model': self.state.model}
+        return obs, reward, self.state.terminal(), {'clauses': self.state.formula.clauses}
 
     def reset(self):
         """
         Resets to the initial state and returns it
         :return:
         """
-        self.state = SATState(self.formula, {})  # resets internal state
-        return encode(self.state)
+        self.state = SATState(self.formula, np.zeros(shape=(self.formula.nv, ), dtype=np.uint8))
+        return encode(self.state.formula.nv, self.state.formula.clauses)
 
     def render(self, mode='human'):
-        pass
+        print('#vars', self.state.formula.nv)
+        print('clauses', self.state.formula.clauses)
+        print('model', self.state.model)
+        print(f'sat={self.state.is_sat()}, unsat={self.state.is_unsat()}')
+        print(encode(self.state.formula.nv, self.state.formula.clauses))
 
     def close(self):
         pass
