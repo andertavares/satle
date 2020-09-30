@@ -93,28 +93,24 @@ class SATEnv(gym.Env):
             'model': spaces.Box(low=-1, high=1, shape=(self.formula.nv,), dtype=np.uint8)  # array with (partial) model
         })
 
-    def encode_action(self, dimacs_var, polarity):
+    def encode_action(self, var_index, value):
         """
-        Returns an action in interval 0, 2*n_vars corresponding to the
-        variable in DIMACS notation with the given polarity
-        :param dimacs_var: variable in DIMACS notation (i.e. ranging from 1 to n_vars)
-        :param polarity: bool corresponding to the value the variable will take
+        Returns an action in interval 0, 2*n_vars corresponding to assigning
+        the truth-value to the given variable
+        :param var_index: variable index (i.e. ranging from 0 to n_vars-1)
+        :param value: bool corresponding to the value the variable will take
         :return:
         """
-        # offsets by n_vars if polarity is positive, because the first 'n_vars' actions
-        # correspond to adding a negated variable to the solution
-        offset = self.formula.nv if polarity else 0
+        # offsets by n_vars if value is positive, because the first 'n_vars' actions
+        # correspond to assigning False to variables
+        offset = self.formula.nv if value else 0
 
-        # subtracts 1 from dimacs_var to correct the first index (0 in array, 1 in dimacs)
-        return dimacs_var - 1 + offset
-
-
-
+        return var_index + offset
 
     def var_and_polarity(self, action):
         """
-        Translates an action into a tuple (var,polarity)
-        Where var is the variable index (from 0 to num_vars-1) and polarity is (+1 or -1)
+        Translates an action into a tuple (var,value)
+        Where var is the variable index (from 0 to num_vars-1) and value is (+1 or -1)
         meaning True or False, respectively
 
         :param action:

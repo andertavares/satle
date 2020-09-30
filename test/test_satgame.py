@@ -43,16 +43,15 @@ class TestSATEnv(unittest.TestCase):
 
         self.assertEqual([[-1, -2], [2], [2, -3, -4]], initial_state.formula.clauses)
 
-        # will add variable 2 to solution with positive polarity
+        # will add variable 2 (index=1) to solution with positive value
         exp_done = False
         exp_model = np.zeros(f.nv)
         exp_model[1] = 1
-        obs, reward, done, info = env.step(env.encode_action(2, True))
+        obs, reward, done, info = env.step(env.encode_action(1, True))
         self.assertEqual([[-1]], info['clauses'])  #not testing obs.formula
         self.assertTrue((exp_model == obs['model']).all(), f'exp={exp_model}, actual={obs["model"]}')
         self.assertEqual(0, reward)
         self.assertEqual(False, done)
-
 
 
 if __name__ == '__main__':
