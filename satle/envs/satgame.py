@@ -76,10 +76,9 @@ class SATEnv(gym.Env):
         """
         super(SATEnv, self).__init__()
         self.formula = formula
-        self.state = SATState(self.formula, np.zeros(shape=(self.formula.nv, ), dtype=np.uint8))
 
-        # literals is a list: [-nv,...,-1, +1, ..., nv] (without zero)
-        self.literals = list(range(-self.formula.nv, 0)) + list(range(1, self.formula.nv+1))
+        # literals is a list: [1,...,n_vars, -1,...,-n_vars] (DIMACS notation without zero)
+        self.literals = list(range(1, self.formula.nv + 1)) + list(range(-1, -self.formula.nv-1, -1))
 
         # 2 actions per variable (asserted or negated)
         self.action_space = spaces.Discrete(2 * self.formula.nv)
@@ -89,9 +88,11 @@ class SATEnv(gym.Env):
         # model contains 0,-1,+1 in each position if the corresponding variable is unassigned, negated, asserted
         # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
         self.observation_space = spaces.Dict({
-            'formula': spaces.Box(low=-1, high=1, shape=(self.formula.nv, len(self.formula.clauses)), dtype=np.uint8),
-            'model': spaces.Box(low=-1, high=1, shape=(self.formula.nv,), dtype=np.uint8)  # array with (partial) model
+            'formula': spaces.Box(low=-1, high=1, shape=(self.formula.nv, len(self.formula.clauses)), dtype=np.int8),
+            'model': spaces.Box(low=-1, high=1, shape=(self.formula.nv,), dtype=np.int8)  # array with (partial) model
         })
+
+        self.reset()
 
     def encode_action(self, var_index, value):
         """
@@ -101,9 +102,9 @@ class SATEnv(gym.Env):
         :param value: bool corresponding to the value the variable will take
         :return:
         """
-        # offsets by n_vars if value is positive, because the first 'n_vars' actions
-        # correspond to assigning False to variables
-        offset = self.formula.nv if value else 0
+        # offsets by n_vars if value is negative, because the first 'n_vars' actions
+        # correspond to assigning True to variables
+        offset = self.formula.nv if not value else 0
 
         return var_index + offset
 
@@ -149,7 +150,7 @@ class SATEnv(gym.Env):
         Resets to the initial state and returns it
         :return:
         """
-        self.state = SATState(self.formula, np.zeros(shape=(self.formula.nv, ), dtype=np.uint8))
+        self.state = SATState(self.formula, np.zeros(shape=(self.formula.nv, ), dtype=np.int8))
         return encode(self.state.formula.nv, self.state.formula.clauses)
 
     def render(self, mode='human'):

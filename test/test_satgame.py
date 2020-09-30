@@ -32,6 +32,16 @@ class TestSATState(unittest.TestCase):
 
 class TestSATEnv(unittest.TestCase):
 
+    def test_encode_action(self):
+        f = CNF(from_clauses=[[-1, -2], [2], [2, -3, -4]])
+        env = SATEnv(f)
+
+        for var in range(0, 4):  # true assignments
+            self.assertEqual(var, env.encode_action(var, True), msg=f'expected={var}')
+
+        for var in range(0, 4):  # false assignments
+            self.assertEqual(4+var, env.encode_action(var, False), msg=f'expected={var}')
+
     def test_step(self):
         f = CNF(from_clauses=[[-1, -2], [2], [2, -3, -4]])
 
@@ -44,7 +54,6 @@ class TestSATEnv(unittest.TestCase):
         self.assertEqual([[-1, -2], [2], [2, -3, -4]], initial_state.formula.clauses)
 
         # will add variable 2 (index=1) to solution with positive value
-        exp_done = False
         exp_model = np.zeros(f.nv)
         exp_model[1] = 1
         obs, reward, done, info = env.step(env.encode_action(1, True))
@@ -53,6 +62,20 @@ class TestSATEnv(unittest.TestCase):
         self.assertEqual(0, reward)
         self.assertEqual(False, done)
 
+        # if I try to set 2 to True again, the state will be the same
+        obs, reward, done, info = env.step(env.encode_action(1, True))
+        self.assertEqual([[-1]], info['clauses'])  # not testing obs.formula
+        self.assertTrue((exp_model == obs['model']).all(), f'exp={exp_model}, actual={obs["model"]}')
+        self.assertEqual(0, reward)
+        self.assertEqual(False, done)
+
+        # now, I'll try to set 1 to False and I'll be done with reward 1
+        obs, reward, done, info = env.step(env.encode_action(0, False))
+        exp_model[0] = -1
+        self.assertEqual([], info['clauses'])  # not testing obs.formula
+        self.assertTrue((exp_model == obs['model']).all(), f'exp={exp_model}, actual={obs["model"]}')
+        self.assertEqual(1, reward)
+        self.assertEqual(True, done)
 
 if __name__ == '__main__':
     unittest.main()
