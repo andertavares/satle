@@ -107,9 +107,9 @@ class SATEnv(gym.Env):
 
         return var_index + offset
 
-    def var_and_polarity(self, action):
+    def var_and_signal(self, action):
         """
-        Translates an action into a tuple (var,value)
+        Translates an action into a tuple (var,signal)
         Where var is the variable index (from 0 to num_vars-1) and value is (+1 or -1)
         meaning True or False, respectively
 
@@ -131,7 +131,7 @@ class SATEnv(gym.Env):
         new_model = copy(self.state.model)
 
         # adds the literal to the partial solution
-        var, value = self.var_and_polarity(action)
+        var, value = self.var_and_signal(action)
         new_model[var] = value
 
         # creates new formula with the result of adding the corresponding literal to the previous
