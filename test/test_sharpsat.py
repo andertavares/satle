@@ -15,10 +15,10 @@ class TestSATState(unittest.TestCase):
         expected_clauses1 = [[-1]]
         expected_clauses2 = [[], [-3, -4]]
         self.assertEqual({2: 2}, next_s1.model)
-        self.assertEqual(expected_clauses1, next_s1.formula.clauses, msg='next_s1')
+        self.assertEqual(expected_clauses1, next_s1.original_clauses.original_clauses, msg='next_s1')
 
         self.assertEqual({2: -2}, next_s2.model)
-        self.assertEqual(expected_clauses2, next_s2.formula.clauses, msg='next_s2')
+        self.assertEqual(expected_clauses2, next_s2.original_clauses.original_clauses, msg='next_s2')
 
 
 class TestSharpSATEnv(unittest.TestCase):
@@ -30,7 +30,7 @@ class TestSharpSATEnv(unittest.TestCase):
         initial_state = env.reset()
 
         self.assertEqual({}, initial_state.model)
-        self.assertEqual([[-1, -2], [2], [2, -3, -4]], initial_state.formula.clauses)
+        self.assertEqual([[-1, -2], [2], [2, -3, -4]], initial_state.original_clauses.original_clauses)
 
         # will select variable 2 to branch on, these are the expected results
         exp_clauses = [
@@ -43,7 +43,7 @@ class TestSharpSATEnv(unittest.TestCase):
         transitions = env.step(initial_state, 2)
 
         for idx, (state, reward, done, info) in enumerate(transitions):
-            self.assertEqual(exp_clauses[idx], state.formula.clauses)
+            self.assertEqual(exp_clauses[idx], state.original_clauses.original_clauses)
             self.assertEqual(exp_rewards[idx], reward)
             self.assertEqual(exp_done[idx], done)
             self.assertEqual(exp_models[idx], info['model'])

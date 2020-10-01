@@ -5,8 +5,8 @@ from .util import unit_propagation
 class SATState:
     def __init__(self, formula, model):
         """
-        Creates a new state with a formula and a model (partial or full)
-        :param formula: pysat.formula.CNF
+        Creates a new state with a original_clauses and a model (partial or full)
+        :param formula: pysat.original_clauses.CNF
         :param model: dict with a partial or full assignment of values to variables
         """
         self.formula = formula.copy()
@@ -56,19 +56,19 @@ class SATState:
 
     def is_sat(self):
         """
-        Returns whether the formula in this state is satisfiable.
+        Returns whether the original_clauses in this state is satisfiable.
         Note that this is not the negation of is_unsat if this state is not terminal.
         :return:
         """
-        return len(self.formula.clauses) == 0  # an empty formula is satisfiable
+        return len(self.formula.original_clauses) == 0  # an empty original_clauses is satisfiable
 
     def is_unsat(self):
         """
-        Returns whether the formula in this state is unsatisfiable.
+        Returns whether the original_clauses in this state is unsatisfiable.
         Note that this is not the negation of is_sat if this state is not terminal.
         :return:
         """
-        return any([len(c) == 0 for c in self.formula.clauses])  # a formula with an empty clause is unsat
+        return any([len(c) == 0 for c in self.formula.original_clauses])  # a original_clauses with an empty clause is unsat
 
     def reward(self):
         """
@@ -87,14 +87,14 @@ class SharpSATEnv:
 
     def __init__(self, formula):
         """
-        Initializes the environment with the formula to be model-counted.
-        The initial state corresponds to the original formula and an empty model
+        Initializes the environment with the original_clauses to be model-counted.
+        The initial state corresponds to the original original_clauses and an empty model
         :param formula:
         """
 
         self.initial_state = SATState(formula, {})
         self.solutions = 0  # number of solutions found so far
-        self.n_vars = formula.nv  # number of variables in the original formula
+        self.n_vars = formula.nv  # number of variables in the original original_clauses
 
     def count_models(self, state):
         """
@@ -109,7 +109,7 @@ class SharpSATEnv:
 
     def step(self, state, action):
         """
-        Implements the action (variable to branch on) in the given state (formula).
+        Implements the action (variable to branch on) in the given state (original_clauses).
         The action incurs in two new states, which are the result of applying
         unit propagations on state + {action} and state + {-action} respectively.
         The list of transitions is returned afterwards.

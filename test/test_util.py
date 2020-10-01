@@ -7,6 +7,9 @@ from satle.envs.util import encode
 
 
 class TestUtil(unittest.TestCase):
+    """
+    TODO test vars_and_indices
+    """
     def test_encode1(self):
         formula = CNF(from_clauses=[[-1, 2], [-2, 1]])
         adj_matrix = encode(formula.clauses)
@@ -44,13 +47,13 @@ class TestUtil(unittest.TestCase):
 
     def test_encode_unordered(self):
         """
-        Same formula as test_encode_ordered, but variables occur in different order
+        Same original_clauses as test_encode_ordered, but variables occur in different order
         and are labeled differently
         :return:
         """
         clauses = [[-7, -3, 5], [-1, -5], [5]]
 
-        expected_matrix = np.zeros((4, 3))  # there are 4 vars and 3 clauses
+        expected_matrix = np.zeros((4, 3))  # there are 4 vars and 3 original_clauses
         expected_matrix[0, 0] = -1  # -7 on 1st clause
         expected_matrix[1, 0] = -1  # -3 on 1st clause
         expected_matrix[2, 0] = 1  # 5 on 1st clause
@@ -60,8 +63,6 @@ class TestUtil(unittest.TestCase):
         actual = encode(clauses)
         self.assertEqual(expected_matrix.shape, actual.shape)
         self.assertTrue((expected_matrix == actual).all())
-
-
 
 if __name__ == '__main__':
     unittest.main()

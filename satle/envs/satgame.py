@@ -1,32 +1,21 @@
-from copy import copy
+from copy import copy, deepcopy
 
 import gym
 from gym import spaces
 import numpy as np
 from pysat.formula import CNF
 
-from .util import unit_propagation, encode, num_vars
+from .util import unit_propagation, encode, num_vars, vars_and_indices
 
 
 class SATState:
-    def __init__(self, formula, model):
+    def __init__(self, clauses):
         """
-        Creates a new state with a formula and a model (partial or full)
-        :param formula: pysat.formula.CNF
-        :param model: tuple with partial or full assignment to variables
+        Creates a new state with a original_clauses and a model (partial or full)
+        :param clauses: list(list(int))
         """
-        self.formula = formula.copy()
-        self.model = copy(model)
-
-    def valid_actions(self):
-        """
-        Returns the valid actions that can be performed in this state
-        :return:
-        """
-        raise NotImplementedError
-        """free_literals = [v for v in range(1, self.formula.nv + 1) if v not in self.model]
-        free_literals += [-v for v in range(1, self.formula.nv + 1) if v not in self.model]
-        return free_literals"""
+        self.clauses = deepcopy(clauses)
+        self.n_vars = num_vars(self.clauses)
 
     def terminal(self):
         """
@@ -37,72 +26,67 @@ class SATState:
 
     def is_sat(self):
         """
-        Returns whether the formula in this state is satisfiable.
+        Returns whether the original_clauses in this state is satisfiable.
         Note that this is not the negation of is_unsat if this state is not terminal.
         :return:
         """
-        return len(self.formula.clauses) == 0  # an empty formula is satisfiable
+        return len(self.clauses) == 0  # an empty original_clauses is satisfiable
 
     def is_unsat(self):
         """
-        Returns whether the formula in this state is unsatisfiable.
+        Returns whether the original_clauses in this state is unsatisfiable.
         Note that this is not the negation of is_sat if this state is not terminal.
         :return:
         """
-        return any([len(c) == 0 for c in self.formula.clauses])  # a formula with an empty clause is unsat
+        return any([len(c) == 0 for c in self.clauses])  # a original_clauses with an empty clause is unsat
 
     def reward(self):
         """
         Returns the reward for reaching the current state
         :return:
         """
-        if self.terminal():
-            return 0
-        return -1
+        return 1 if self.is_sat() else -1 if self.is_unsat() else 0
 
 
 class SATEnv(gym.Env):
     """
     SAT gym environment. The goal is to find a solution to the
-    formula, preferably with the least number of steps (variable assignments).
+    original_clauses, preferably with the least number of steps (variable assignments).
     Finding an unsat state yields -1 of reward.
     """
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, formula):
+    def __init__(self, clauses):
         """
 
-        :param formula: a satisfiable formula
+        :param clauses: a satisfiable original_clauses
         """
         super(SATEnv, self).__init__()
-        self.formula = formula
-        self.n_vars = self.formula.nv
+        self.original_clauses = clauses
+        self.n_vars = num_vars(self.original_clauses)  # fixed throughout execution
+
+        # each position stores the value of a variable: 0,1,-1 for unassigned,True,False
+        self.model = np.zeros(shape=(self.n_vars,), dtype=np.int8)
+
+        self.var_to_idx, self.idx_to_var = vars_and_indices(self.original_clauses)
 
         # literals is a list: [1,...,n_vars, -1,...,-n_vars] (DIMACS notation without zero)
         self.literals = list(range(1, self.n_vars + 1)) + list(range(-1, -self.n_vars-1, -1))
 
-        # 2 actions per variable (asserted or negated)
+        # 2 actions per variable (assign True or False to it)
         self.action_space = spaces.Discrete(2 * self.n_vars)
 
-        # obs space is a dict{'graph': adj_matrix, 'model': model}
-        # adj matrix is a vars x clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
-        # model contains 0,-1,+1 in each position if the corresponding variable is unassigned, negated, asserted
+        # obs space the adjacency matrix of the factor graph
+        # adj matrix is a vars x original_clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
         # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
-        '''self.observation_space = spaces.Dict({
-            'graph': spaces.Box(low=-1, high=1, shape=(self.n_vars, len(self.formula.clauses)), dtype=np.int8),
-            'model': spaces.Box(low=-1, high=1, shape=(self.n_vars,), dtype=np.int8)  # array with (partial) model
-        })'''
-        # TODO relabel formula and keep track of model as game progresses
-        self.observation_space = spaces.Box(
-            low=-1, high=1, shape=(self.n_vars, len(self.formula.clauses)), dtype=np.int8
-        )
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(self.n_vars, len(self.original_clauses)), dtype=np.int8),
 
         self.state = None  # is initialized at reset
         self.reset()
 
     def encode_action(self, var_index, value):
         """
-        Returns an action in interval 0, 2*n_vars corresponding to assigning
+        Returns an action in interval 0, 2 * n_vars corresponding to assigning
         the truth-value to the given variable
         :param var_index: variable index (i.e. ranging from 0 to n_vars-1)
         :param value: bool corresponding to the value the variable will take
@@ -113,6 +97,20 @@ class SATEnv(gym.Env):
         offset = self.n_vars if not value else 0
 
         return var_index + offset
+
+    def action_to_literal(self, action):
+        """
+        Translates an action (ranging from 0..2*n_vars)
+        to a DIMACS literal ([1,...,orig_vars]+[-1,...,-orig_vars])
+        where n_vars refers to the current formula and orig_vars
+        to the number of variables in the original formula (passed to __init__)
+        :param action:
+        :return:
+        """
+        var = self.idx_to_var[action]
+
+        # the first n_vars are positive literals, the remaining are negative
+        return var if action < self.n_vars else -var
 
     def var_and_signal(self, action):
         """
@@ -129,65 +127,67 @@ class SATEnv(gym.Env):
     def step(self, action):
         """
         Processes the action (selected variable) by adding it to the
-        partial solution and returning the resulting formula
+        partial solution and returning the resulting original_clauses
         and associated reward, done and info.
-        FIXME unit propagation would stop working with new action spaces, must relabel the variables
         :param action:
         :return:
         """
 
-        new_model = copy(self.state.model)
-
         # adds the literal to the partial solution
-        var, signal = self.var_and_signal(action)
-        new_model[var] = signal
+        literal = self.action_to_literal(action)
+        # index is zero-based where literal is 1-based; assigned value is the literal signal
+        var_idx, var_sign = abs(literal)-1, 1 if literal > 0 else -1
 
-        # creates new formula with the result of adding the corresponding literal to the previous
-        new_formula = unit_propagation(self.state.formula, var, signal)
+        # returns data for this unchanged state if action is out of range or
+        # in an attempt to assign a value to a non-free variable
+        if not self.action_space.contains(action) or self.model[var_idx] != 0:
+            obs = encode(self.state.clauses)
+            info = {'model': self.model, 'clauses': self.state.clauses}
+            return obs, self.state.reward(), self.state.terminal(), info
 
-        self.state = SATState(new_formula, new_model)
+        # assigns the intended value to the variable
+        self.model[var_idx] = var_sign
 
-        self.update_obs_action_spaces()
+        # creates new original_clauses with the result of adding the corresponding literal to the previous
+        new_clauses = unit_propagation(self.state.clauses, var_idx, var_sign)
 
-        # reward: 1, -1, 0 for sat, unsat, non-terminal, respectively
-        reward = 1 if self.state.is_sat() else -1 if self.state.is_unsat() else 0
-        obs = {'graph': encode(self.state.formula.clauses), 'model': self.state.model}
-        return obs, reward, self.state.terminal(), {'clauses': self.state.formula.clauses}
+        # updates indices
+        self.var_to_idx, self.idx_to_var = vars_and_indices(new_clauses)
+        self.state = SATState(new_clauses)
+
+        # updates action and observation spaces
+        self.action_space = spaces.Discrete(2 * self.state.n_vars)
+        self.observation_space = spaces.Box(
+            low=-1, high=1, shape=(self.state.n_vars, len(self.state.clauses)), dtype=np.int8
+        )
+
+        obs = encode(self.state.clauses)
+        info = {'model': self.model, 'clauses': self.state.clauses}
+        return obs, self.state.reward(), self.state.terminal(), info
 
     def reset(self):
         """
         Resets to the initial state and returns it
         :return:
         """
-        self.n_vars = self.formula.nv
-        self.action_space = spaces.Discrete(2 * self.n_vars)
 
+        self.model = np.zeros(shape=(self.n_vars,), dtype=np.int8)
+        self.var_to_idx, self.idx_to_var = vars_and_indices(self.original_clauses)
+        self.action_space = spaces.Discrete(2 * self.n_vars)
         self.observation_space = spaces.Box(
-            low=-1, high=1, shape=(self.n_vars, len(self.formula.clauses)), dtype=np.int8
+            low=-1, high=1, shape=(self.n_vars, len(self.original_clauses)), dtype=np.int8
         )
-        self.state = SATState(self.formula, np.zeros(shape=(self.formula.nv, ), dtype=np.int8))
-        return encode(self.state.formula.clauses)
+        self.state = SATState(self.original_clauses)
+        return encode(self.state.clauses)
 
     def render(self, mode='human'):
-        print('#vars', self.state.formula.nv)
-        print('clauses', self.state.formula.clauses)
+        print('#vars', self.state.original_clauses.nv)
+        print('original_clauses', self.state.original_clauses.original_clauses)
         print('model', self.state.model)
         print(f'sat={self.state.is_sat()}, unsat={self.state.is_unsat()}')
-        print(encode(self.state.formula.clauses))
+        print(encode(self.state.original_clauses.original_clauses))
 
     def close(self):
         pass
 
-    def update_obs_action_spaces(self):
-        self.n_vars = num_vars(self.formula.clauses)
-        self.action_space = spaces.Discrete(2 * self.n_vars)
-
-        # obs space is a dict{'graph': adj_matrix, 'model': model}
-        # adj matrix is a vars x clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
-        # model contains 0,-1,+1 in each position if the corresponding variable is unassigned, negated, asserted
-        # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
-        self.observation_space = spaces.Dict({
-            'graph': spaces.Box(low=-1, high=1, shape=(self.n_vars, len(self.state.formula.clauses)), dtype=np.int8),
-            'model': spaces.Box(low=-1, high=1, shape=(self.n_vars,), dtype=np.int8)  # array with (partial) model
-        })
 
