@@ -4,30 +4,6 @@ import numpy as np
 from pysat.formula import CNF
 
 from satle.envs.satgame import SATEnv
-from satle.envs.util import encode
-
-
-class TestSATState(unittest.TestCase):
-    def test_encode(self):
-        formula = CNF(from_clauses=[[-1, 2], [-2, 1]])
-        adj_matrix = encode(formula.nv, formula.clauses)
-        # variable 1 (index 0) is asserted in clause 1, var 2 is asserted in clause 0
-        positives = [(0, 1), (1, 0)]
-
-        # var 1 is negated in clause 0, var 2 is negated in clause 1
-        negatives = [(0, 0), (1, 1)]
-
-        for p in positives:
-            self.assertEqual(1, adj_matrix[p[0], p[1]])
-
-        for n in negatives:
-            self.assertEqual(-1, adj_matrix[n[0], n[1]])
-
-        # zero elsewhere
-        for i in range(len(adj_matrix)):
-            for j in range(len(adj_matrix[i])):
-                if (i, j) not in positives and (i, j) not in negatives:
-                    self.assertEqual(0, adj_matrix[i, j])
 
 
 class TestSATEnv(unittest.TestCase):

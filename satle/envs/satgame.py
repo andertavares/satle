@@ -92,6 +92,7 @@ class SATEnv(gym.Env):
             'model': spaces.Box(low=-1, high=1, shape=(self.formula.nv,), dtype=np.int8)  # array with (partial) model
         })
 
+        self.state = None  # is initialized at reset
         self.reset()
 
     def encode_action(self, var_index, value):
@@ -132,11 +133,11 @@ class SATEnv(gym.Env):
         new_model = copy(self.state.model)
 
         # adds the literal to the partial solution
-        var, value = self.var_and_signal(action)
-        new_model[var] = value
+        var, signal = self.var_and_signal(action)
+        new_model[var] = signal
 
         # creates new formula with the result of adding the corresponding literal to the previous
-        new_formula = unit_propagation(self.formula, self.literals[action])
+        new_formula = unit_propagation(self.state.formula, var, signal)
 
         self.state = SATState(new_formula, new_model)
 

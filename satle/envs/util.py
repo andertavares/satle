@@ -36,15 +36,17 @@ def decode(adj_tensor, model):
     raise NotImplementedError
 
 
-def unit_propagation(formula, literal):
+def unit_propagation(formula, var, signal):
     """
-    Performs unit propagation of a literal in the formula.
-    That is, removes all clauses with l and removes ~l from the clauses it occurs
+    Performs unit propagation of a literal (=var*signal) in the formula.
+    That is, removes all clauses with literal and removes ~literal from the clauses it occurs
     :param formula:
-    :param literal:
+    :param var: variable to be propagated
+    :param signal: +1 if var is assigned True, -1 if False
     :return:
     """
     new_f = formula.copy()
+    literal = (var+1)*signal  # brings to DIMACS notation
 
     # removes clauses with literal
     occurrences = [literal not in c for c in new_f.clauses]  # creates an array mask to keep clauses without literal
