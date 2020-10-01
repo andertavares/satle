@@ -86,5 +86,6 @@ class TestUtil(unittest.TestCase):
         f = unit_propagation(f, 1, -1)
         self.assertEqual([[], [-3, -4]], f)
 
+
 if __name__ == '__main__':
     unittest.main()

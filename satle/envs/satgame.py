@@ -102,8 +102,8 @@ class SATEnv(gym.Env):
         """
         Translates an action (ranging from 0..2*n_vars)
         to a DIMACS literal ([1,...,orig_vars]+[-1,...,-orig_vars])
-        where n_vars refers to the current formula and orig_vars
-        to the number of variables in the original formula (passed to __init__)
+        where n_vars refers to the current clauses and orig_vars
+        to the number of variables in the original clauses (passed to __init__)
         :param action:
         :return:
         """

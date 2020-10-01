@@ -9,8 +9,7 @@ from satle.envs.satgame import SATEnv
 class TestSATEnv(unittest.TestCase):
 
     def test_encode_action(self):
-        f = CNF(from_clauses=[[-1, -2], [2], [2, -3, -4]])
-        env = SATEnv(f)
+        env = SATEnv([[-1, -2], [2], [2, -3, -4]])
 
         for var in range(0, 4):  # true assignments
             self.assertEqual(var, env.encode_action(var, True), msg=f'expected={var}')
@@ -21,13 +20,13 @@ class TestSATEnv(unittest.TestCase):
     def test_step(self):
         f = CNF(from_clauses=[[-1, -2], [2], [2, -3, -4]])
 
-        env = SATEnv(f)
+        env = SATEnv(f.clauses)
         initial_state = env.state  #env.reset()
 
         # that's how two np arrays should be compared for equality...
-        self.assertTrue((np.zeros(f.nv) == initial_state.model).all(), f'model: {initial_state.model}')
+        self.assertTrue((np.zeros(f.nv) == env.model).all(), f'model: {env.model}')
 
-        self.assertEqual([[-1, -2], [2], [2, -3, -4]], initial_state.original_clauses.original_clauses)
+        self.assertEqual([[-1, -2], [2], [2, -3, -4]], env.state.clauses)
 
         # will add variable 2 (index=1) to solution with positive value
         exp_model = np.zeros(f.nv)
@@ -38,17 +37,17 @@ class TestSATEnv(unittest.TestCase):
         expected_matrix[0, 0] = -1  # -1 on 1st clause
         obs, reward, done, info = env.step(env.encode_action(1, True))
 
-        self.assertTrue((expected_matrix == obs['graph']).all())
-        self.assertEqual([[-1]], info['original_clauses'])
-        self.assertTrue((exp_model == obs['model']).all(), f'exp={exp_model}, actual={obs["model"]}')
+        self.assertTrue((expected_matrix == obs).all())
+        self.assertEqual([[-1]], info['clauses'])
+        self.assertTrue((exp_model == info['model']).all(), f'exp={exp_model}, actual={info["model"]}')
         self.assertEqual(0, reward)
         self.assertEqual(False, done)
 
         # if I try to set 2 to True again, the state will be the same
         obs, reward, done, info = env.step(env.encode_action(1, True))
-        self.assertTrue((expected_matrix == obs['graph']).all())
-        self.assertEqual([[-1]], info['original_clauses'])
-        self.assertTrue((exp_model == obs['model']).all(), f'exp={exp_model}, actual={obs["model"]}')
+        self.assertTrue((expected_matrix == obs).all())
+        self.assertEqual([[-1]], info['clauses'])
+        self.assertTrue((exp_model == info['model']).all(), f'exp={exp_model}, actual={info["model"]}')
         self.assertEqual(0, reward)
         self.assertEqual(False, done)
 
@@ -56,9 +55,9 @@ class TestSATEnv(unittest.TestCase):
         obs, reward, done, info = env.step(env.encode_action(0, False))
         expected_matrix = np.zeros((0, 0))  # empty matrix
         exp_model[0] = -1
-        self.assertTrue((expected_matrix == obs['graph']).all())
-        self.assertEqual([], info['original_clauses'])
-        self.assertTrue((exp_model == obs['model']).all(), f'exp={exp_model}, actual={obs["model"]}')
+        self.assertTrue((expected_matrix == obs).all())
+        self.assertEqual([], info['clauses'])
+        self.assertTrue((exp_model == info['model']).all(), f'exp={exp_model}, actual={info["model"]}')
         self.assertEqual(1, reward)
         self.assertEqual(True, done)
 
