@@ -81,14 +81,15 @@ class SATEnv(gym.Env):
         self.literals = list(range(1, self.formula.nv + 1)) + list(range(-1, -self.formula.nv-1, -1))
 
         # 2 actions per variable (asserted or negated)
+        # TODO change spaces dynamically (see https://github.com/openai/gym/issues/580)
         self.action_space = spaces.Discrete(2 * self.formula.nv)
 
-        # obs space is a dict{'formula': adj_matrix, 'model': model}
+        # obs space is a dict{'graph': adj_matrix, 'model': model}
         # adj matrix is a vars x clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
         # model contains 0,-1,+1 in each position if the corresponding variable is unassigned, negated, asserted
         # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
         self.observation_space = spaces.Dict({
-            'formula': spaces.Box(low=-1, high=1, shape=(self.formula.nv, len(self.formula.clauses)), dtype=np.int8),
+            'graph': spaces.Box(low=-1, high=1, shape=(self.formula.nv, len(self.formula.clauses)), dtype=np.int8),
             'model': spaces.Box(low=-1, high=1, shape=(self.formula.nv,), dtype=np.int8)  # array with (partial) model
         })
 
@@ -99,6 +100,7 @@ class SATEnv(gym.Env):
         """
         Returns an action in interval 0, 2*n_vars corresponding to assigning
         the truth-value to the given variable
+        FIXME does not respect the current formula size
         :param var_index: variable index (i.e. ranging from 0 to n_vars-1)
         :param value: bool corresponding to the value the variable will take
         :return:
@@ -143,7 +145,7 @@ class SATEnv(gym.Env):
 
         # reward: 1, -1, 0 for sat, unsat, non-terminal, respectively
         reward = 1 if self.state.is_sat() else -1 if self.state.is_unsat() else 0
-        obs = {'formula': encode(self.formula.nv, self.state.formula.clauses), 'model': self.state.model}
+        obs = {'graph': encode(self.state.formula.clauses), 'model': self.state.model}
         return obs, reward, self.state.terminal(), {'clauses': self.state.formula.clauses}
 
     def reset(self):
@@ -152,14 +154,14 @@ class SATEnv(gym.Env):
         :return:
         """
         self.state = SATState(self.formula, np.zeros(shape=(self.formula.nv, ), dtype=np.int8))
-        return encode(self.state.formula.nv, self.state.formula.clauses)
+        return encode(self.state.formula.clauses)
 
     def render(self, mode='human'):
         print('#vars', self.state.formula.nv)
         print('clauses', self.state.formula.clauses)
         print('model', self.state.model)
         print(f'sat={self.state.is_sat()}, unsat={self.state.is_unsat()}')
-        print(encode(self.state.formula.nv, self.state.formula.clauses))
+        print(encode(self.state.formula.clauses))
 
     def close(self):
         pass
