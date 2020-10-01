@@ -3,7 +3,6 @@ from copy import copy, deepcopy
 import gym
 from gym import spaces
 import numpy as np
-from pysat.formula import CNF
 
 from .util import unit_propagation, encode, num_vars, vars_and_indices
 
@@ -117,21 +116,9 @@ class SATEnv(gym.Env):
         # the first n_vars are positive assignments, the remaining are negative
         assign_true = action < self.state.n_vars
         idx = action if assign_true else action // 2
-        var = self.idx_to_var[idx]  # FIXME does not work if action is set to false
+        var = self.idx_to_var[idx]
 
         return abs(var-1), 1 if assign_true else -1
-
-        """
-        Translates an action into a tuple (var,signal)
-        Where var is the variable index (from 0 to num_vars-1) and value is (+1 or -1)
-        meaning True or False, respectively
-
-        :param action:
-        :return:
-        
-        lit = self.literals[action]  # translates from [0,..., 2*num_vars] to [-num_vars, ...,-1, +1,...,num_vars]
-        return abs(lit) - 1, +1 if lit > 0 else -1
-        """
 
     def step(self, action):
         """
