@@ -3,13 +3,10 @@ import unittest
 import numpy as np
 from pysat.formula import CNF
 
-from satle.envs.util import encode, unit_propagation, num_vars
+from satle.envs.util import encode, unit_propagation, num_vars, vars_and_indices
 
 
 class TestUtil(unittest.TestCase):
-    """
-    TODO test vars_and_indices
-    """
     def test_encode1(self):
         formula = CNF(from_clauses=[[-1, 2], [-2, 1]])
         adj_matrix = encode(formula.clauses)
@@ -97,6 +94,19 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(2, num_vars([[-1, -4], [], [1, 4]]))
         self.assertEqual(0, num_vars([]))
         self.assertEqual(0, num_vars([[], []]))
+
+    def test_vars_and_indices_ordered(self):
+        f = [[-1, -2], [2], [2, -3, -4]]
+        var_to_idx, idx_to_var = vars_and_indices(f)
+        self.assertEqual({1: 0, 2: 1, 3: 2, 4: 3}, var_to_idx)
+        self.assertEqual({0: 1, 1: 2, 2: 3, 3: 4}, idx_to_var)
+
+    def test_vars_and_indices_unordered(self):
+        f = [[-7, -3, 5], [-1, -5], [5]]  # same as before, but different labels & clause ordering
+        var_to_idx, idx_to_var = vars_and_indices(f)
+        self.assertEqual({7: 0, 3: 1, 5: 2, 1: 3}, var_to_idx)
+        self.assertEqual({0: 7, 1: 3, 2: 5, 3: 1}, idx_to_var)
+
 
 if __name__ == '__main__':
     unittest.main()

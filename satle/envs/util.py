@@ -11,7 +11,7 @@ def vars_and_indices(clauses):
     in the clauses (index is exactly the order of occurrence).
     The second dict is the reverse mapping (from index to DIMACS variable)
     :param clauses:list(list(int))
-    :return:tuple(OrderedDict,dict)
+    :return:OrderedDict,dict
     """
     var_set = OrderedDict()  # uniquely stores each variable in the original_clauses, preserving order of first occurrence
     for c in clauses:
