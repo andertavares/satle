@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from pysat.formula import CNF
 
-from satle.envs.util import encode
+from satle.envs.util import encode, unit_propagation
 
 
 class TestUtil(unittest.TestCase):
@@ -63,6 +63,28 @@ class TestUtil(unittest.TestCase):
         actual = encode(clauses)
         self.assertEqual(expected_matrix.shape, actual.shape)
         self.assertTrue((expected_matrix == actual).all())
+
+    def test_unit_propagation_until_empty(self):
+        f = [[-1, -2], [2]]
+        # assigning True to 2
+        f = unit_propagation(f, 1, 1)
+        self.assertEqual([[-1]], f)
+
+        #  assigning False to 1
+        f = unit_propagation(f, 0, -1)
+        self.assertEqual([], f)
+
+    def test_unit_propagation_multiple_clauses_removed(self):
+        f = [[-1, -2], [2], [2, -3, -4]]
+        # setting 2 to True
+        f = unit_propagation(f, 1, 1)
+        self.assertEqual([[-1]], f)
+
+    def test_unit_propagation_negated_literal(self):
+        f = [[-1, -2], [2], [2, -3, -4]]
+        # setting 2 to false
+        f = unit_propagation(f, 1, -1)
+        self.assertEqual([[], [-3, -4]], f)
 
 if __name__ == '__main__':
     unittest.main()
