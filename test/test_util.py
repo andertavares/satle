@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from pysat.formula import CNF
 
-from satle.envs.util import encode, unit_propagation
+from satle.envs.util import encode, unit_propagation, num_vars
 
 
 class TestUtil(unittest.TestCase):
@@ -86,6 +86,17 @@ class TestUtil(unittest.TestCase):
         f = unit_propagation(f, 1, -1)
         self.assertEqual([[], [-3, -4]], f)
 
+    def test_num_vars(self):
+        """
+        Counts the actual number of variables in the original_clauses
+        :param clauses:
+        :return:
+        """
+        self.assertEqual(4, num_vars([[-1, -2], [2], [2, -3, -4]]))
+        self.assertEqual(2, num_vars([[-1, -4], [1], [1, 4]]))
+        self.assertEqual(2, num_vars([[-1, -4], [], [1, 4]]))
+        self.assertEqual(0, num_vars([]))
+        self.assertEqual(0, num_vars([[], []]))
 
 if __name__ == '__main__':
     unittest.main()
