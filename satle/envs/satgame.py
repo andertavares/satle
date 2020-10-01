@@ -5,7 +5,7 @@ from gym import spaces
 import numpy as np
 from pysat.formula import CNF
 
-from .util import unit_propagation, encode
+from .util import unit_propagation, encode, num_vars
 
 
 class SATState:
@@ -76,22 +76,26 @@ class SATEnv(gym.Env):
         """
         super(SATEnv, self).__init__()
         self.formula = formula
+        self.n_vars = self.formula.nv
 
         # literals is a list: [1,...,n_vars, -1,...,-n_vars] (DIMACS notation without zero)
-        self.literals = list(range(1, self.formula.nv + 1)) + list(range(-1, -self.formula.nv-1, -1))
+        self.literals = list(range(1, self.n_vars + 1)) + list(range(-1, -self.n_vars-1, -1))
 
         # 2 actions per variable (asserted or negated)
-        # TODO change spaces dynamically (see https://github.com/openai/gym/issues/580)
-        self.action_space = spaces.Discrete(2 * self.formula.nv)
+        self.action_space = spaces.Discrete(2 * self.n_vars)
 
         # obs space is a dict{'graph': adj_matrix, 'model': model}
         # adj matrix is a vars x clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
         # model contains 0,-1,+1 in each position if the corresponding variable is unassigned, negated, asserted
         # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
-        self.observation_space = spaces.Dict({
-            'graph': spaces.Box(low=-1, high=1, shape=(self.formula.nv, len(self.formula.clauses)), dtype=np.int8),
-            'model': spaces.Box(low=-1, high=1, shape=(self.formula.nv,), dtype=np.int8)  # array with (partial) model
-        })
+        '''self.observation_space = spaces.Dict({
+            'graph': spaces.Box(low=-1, high=1, shape=(self.n_vars, len(self.formula.clauses)), dtype=np.int8),
+            'model': spaces.Box(low=-1, high=1, shape=(self.n_vars,), dtype=np.int8)  # array with (partial) model
+        })'''
+        # TODO relabel formula and keep track of model as game progresses
+        self.observation_space = spaces.Box(
+            low=-1, high=1, shape=(self.n_vars, len(self.formula.clauses)), dtype=np.int8
+        )
 
         self.state = None  # is initialized at reset
         self.reset()
@@ -100,14 +104,13 @@ class SATEnv(gym.Env):
         """
         Returns an action in interval 0, 2*n_vars corresponding to assigning
         the truth-value to the given variable
-        FIXME does not respect the current formula size
         :param var_index: variable index (i.e. ranging from 0 to n_vars-1)
         :param value: bool corresponding to the value the variable will take
         :return:
         """
         # offsets by n_vars if value is negative, because the first 'n_vars' actions
         # correspond to assigning True to variables
-        offset = self.formula.nv if not value else 0
+        offset = self.n_vars if not value else 0
 
         return var_index + offset
 
@@ -128,6 +131,7 @@ class SATEnv(gym.Env):
         Processes the action (selected variable) by adding it to the
         partial solution and returning the resulting formula
         and associated reward, done and info.
+        FIXME unit propagation would stop working with new action spaces, must relabel the variables
         :param action:
         :return:
         """
@@ -143,6 +147,8 @@ class SATEnv(gym.Env):
 
         self.state = SATState(new_formula, new_model)
 
+        self.update_obs_action_spaces()
+
         # reward: 1, -1, 0 for sat, unsat, non-terminal, respectively
         reward = 1 if self.state.is_sat() else -1 if self.state.is_unsat() else 0
         obs = {'graph': encode(self.state.formula.clauses), 'model': self.state.model}
@@ -153,6 +159,12 @@ class SATEnv(gym.Env):
         Resets to the initial state and returns it
         :return:
         """
+        self.n_vars = self.formula.nv
+        self.action_space = spaces.Discrete(2 * self.n_vars)
+
+        self.observation_space = spaces.Box(
+            low=-1, high=1, shape=(self.n_vars, len(self.formula.clauses)), dtype=np.int8
+        )
         self.state = SATState(self.formula, np.zeros(shape=(self.formula.nv, ), dtype=np.int8))
         return encode(self.state.formula.clauses)
 
@@ -165,4 +177,17 @@ class SATEnv(gym.Env):
 
     def close(self):
         pass
+
+    def update_obs_action_spaces(self):
+        self.n_vars = num_vars(self.formula.clauses)
+        self.action_space = spaces.Discrete(2 * self.n_vars)
+
+        # obs space is a dict{'graph': adj_matrix, 'model': model}
+        # adj matrix is a vars x clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
+        # model contains 0,-1,+1 in each position if the corresponding variable is unassigned, negated, asserted
+        # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
+        self.observation_space = spaces.Dict({
+            'graph': spaces.Box(low=-1, high=1, shape=(self.n_vars, len(self.state.formula.clauses)), dtype=np.int8),
+            'model': spaces.Box(low=-1, high=1, shape=(self.n_vars,), dtype=np.int8)  # array with (partial) model
+        })
 
