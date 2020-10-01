@@ -84,35 +84,43 @@ class SATEnv(gym.Env):
         self.state = None  # is initialized at reset
         self.reset()
 
-    def encode_action(self, var_index, value):
+    def encode_action(self, dimacs_var, value):
         """
         Returns an action in interval 0, 2 * n_vars corresponding to assigning
-        the truth-value to the given variable
-        :param var_index: variable index (i.e. ranging from 0 to n_vars-1)
+        the truth-value to the given dimacs variable.
+        Especially useful if one is looking at the clauses rather than the observation
+        :param dimacs_var: variable index (i.e. ranging from 1 to n_vars)
         :param value: bool corresponding to the value the variable will take
         :return:
         """
         # offsets by n_vars if value is negative, because the first 'n_vars' actions
         # correspond to assigning True to variables
-        offset = self.n_vars if not value else 0
+        idx = self.var_to_idx[dimacs_var]
+        offset = self.state.n_vars if not value else 0
 
-        return var_index + offset
+        return idx + offset
 
-    def action_to_literal(self, action):
+    def var_and_signal(self, action):
         """
         Translates an action (ranging from 0..2*n_vars)
         to a DIMACS literal ([1,...,orig_vars]+[-1,...,-orig_vars])
         where n_vars refers to the current clauses and orig_vars
         to the number of variables in the original clauses (passed to __init__)
+
+        Returns -1,0 (invalid action and signal) if action is invalid
         :param action:
-        :return:
+        :return:int,int
         """
-        var = self.idx_to_var[action]
+        # returns invalid values for invalid action
+        if not self.action_space.contains(action):
+            return -1, 0
+        # the first n_vars are positive assignments, the remaining are negative
+        assign_true = action < self.state.n_vars
+        idx = action if assign_true else action // 2
+        var = self.idx_to_var[idx]  # FIXME does not work if action is set to false
 
-        # the first n_vars are positive literals, the remaining are negative
-        return var if action < self.n_vars else -var
+        return abs(var-1), 1 if assign_true else -1
 
-    def var_and_signal(self, action):
         """
         Translates an action into a tuple (var,signal)
         Where var is the variable index (from 0 to num_vars-1) and value is (+1 or -1)
@@ -120,9 +128,10 @@ class SATEnv(gym.Env):
 
         :param action:
         :return:
-        """
+        
         lit = self.literals[action]  # translates from [0,..., 2*num_vars] to [-num_vars, ...,-1, +1,...,num_vars]
         return abs(lit) - 1, +1 if lit > 0 else -1
+        """
 
     def step(self, action):
         """
@@ -134,9 +143,9 @@ class SATEnv(gym.Env):
         """
 
         # adds the literal to the partial solution
-        literal = self.action_to_literal(action)
+        #literal = self.action_to_literal(action)
         # index is zero-based where literal is 1-based; assigned value is the literal signal
-        var_idx, var_sign = abs(literal)-1, 1 if literal > 0 else -1
+        var_idx, var_sign = self.var_and_signal(action)  #abs(literal)-1, 1 if literal > 0 else -1
 
         # returns data for this unchanged state if action is out of range or
         # in an attempt to assign a value to a non-free variable
