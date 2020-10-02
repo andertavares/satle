@@ -64,8 +64,11 @@ class SATEnvStatic(gym.Env):
         :param clauses: a satisfiable original_clauses
         """
         super(SATEnvStatic, self).__init__()
+        # original_clauses and n_vars are static (fixed) throughout execution
         self.original_clauses = clauses
-        self.n_vars = num_vars(self.original_clauses)  # fixed throughout execution
+        self.n_vars = 0
+        for cl in self.original_clauses:
+            self.n_vars = max([abs(l) for l in cl] + [self.n_vars])
 
         # each position stores the value of a variable: 0,1,-1 for unassigned,True,False
         self.model = np.zeros(shape=(self.n_vars,), dtype=np.int8)
@@ -98,7 +101,7 @@ class SATEnvStatic(gym.Env):
         # offsets by n_vars if value is negative, because the first 'n_vars' actions
         # correspond to assigning True to variables
         idx = self.var_to_idx[dimacs_var]
-        offset = self.state.n_vars if not value else 0
+        offset = self.n_vars if not value else 0
 
         return idx + offset
 
@@ -144,7 +147,7 @@ class SATEnvStatic(gym.Env):
 
         lit = self.literals[action]
 
-        return abs(lit-1), 1 if lit > 0 else -1
+        return abs(lit)-1, 1 if lit > 0 else -1
 
     def step(self, action):
         """

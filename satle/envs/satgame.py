@@ -144,7 +144,7 @@ class SATEnv(gym.Env):
         idx = action if assign_true else action // 2
         var = self.idx_to_var[idx]
 
-        return abs(var-1), 1 if assign_true else -1
+        return abs(var)-1, 1 if assign_true else -1
 
     def step(self, action):
         """
