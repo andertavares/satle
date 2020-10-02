@@ -4,13 +4,13 @@ import gym
 from gym import spaces
 import numpy as np
 
-from .util import unit_propagation, encode, num_vars, vars_and_indices
+from .util import unit_propagation, num_vars, vars_and_indices
 
 
 class SATState:
     def __init__(self, clauses):
         """
-        Creates a new state with a original_clauses and a model (partial or full)
+        Creates a new state from the clauses
         :param clauses: list(list(int))
         """
         self.clauses = deepcopy(clauses)
@@ -45,6 +45,33 @@ class SATState:
         :return:
         """
         return 1 if self.is_sat() else -1 if self.is_unsat() else 0
+
+    def encode(self):
+        """
+        Encodes the state as a factor graph and returns the dense
+        adjacency matrix, with one node per variable and per clause
+        Edges are between vars & original_clauses:
+        - positive edge (+1) if var is asserted in clause
+        - negative edge (-1) if var is negated in clause
+        - no edge (0) if var is not present in clause
+        Variable indexes in the original_clauses are according to their occurence in the original_clauses.
+        E.g., if the original_clauses is: [[-5, 1], [2, -7, 5]] then the index of
+        variables 5,1,2,7 become 0,1,2,3 respectively.
+        :param clauses: list of original_clauses (each clause is a list of literals in DIMACS notation)
+        :return: np.array with the adjacency matrix (#vars x #original_clauses), with +1/-1 for asserted/negated var in clause and 0
+        if var not present in clause
+        """
+
+        # maps each variable to its index in the matrix
+        var_to_idx, _ = vars_and_indices(self.clauses)
+        adj = np.zeros((len(var_to_idx), len(self.clauses)))  # n x c adjacency matrix (n=#vars, c=#original_clauses)
+
+        for c_num, clause in enumerate(self.clauses):
+            for literal in clause:
+                var_idx = var_to_idx[abs(literal)]
+                adj[var_idx][c_num] = -1 if literal < 0 else 1
+
+        return adj
 
 
 class SATEnv(gym.Env):
@@ -137,7 +164,7 @@ class SATEnv(gym.Env):
         # returns data for this unchanged state if action is out of range or
         # in an attempt to assign a value to a non-free variable
         if not self.action_space.contains(action) or self.model[var_idx] != 0:
-            obs = encode(self.state.clauses)
+            obs = self.state.encode()
             info = {'model': self.model, 'clauses': self.state.clauses}
             return obs, self.state.reward(), self.state.terminal(), info
 
@@ -157,7 +184,7 @@ class SATEnv(gym.Env):
             low=-1, high=1, shape=(self.state.n_vars, len(self.state.clauses)), dtype=np.int8
         )
 
-        obs = encode(self.state.clauses)
+        obs = self.state.encode()
         info = {'model': self.model, 'clauses': self.state.clauses}
         return obs, self.state.reward(), self.state.terminal(), info
 
@@ -174,14 +201,14 @@ class SATEnv(gym.Env):
             low=-1, high=1, shape=(self.n_vars, len(self.original_clauses)), dtype=np.int8
         )
         self.state = SATState(self.original_clauses)
-        return encode(self.state.clauses)
+        return self.state.encode()
 
     def render(self, mode='human'):
         print('#vars', self.state.original_clauses.nv)
         print('original_clauses', self.state.original_clauses.original_clauses)
         print('model', self.state.model)
         print(f'sat={self.state.is_sat()}, unsat={self.state.is_unsat()}')
-        print(encode(self.state.original_clauses.original_clauses))
+        print(self.state.encode())
 
     def close(self):
         pass
