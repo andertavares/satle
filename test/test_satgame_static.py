@@ -17,27 +17,27 @@ class TestSATEnv(unittest.TestCase):
         negatives = [(0, 0), (1, 1)]
 
         for p in positives:
-            self.assertEqual(1, adj_matrix[p[0], p[1]])
+            self.assertTrue((adj_matrix[p[0],p[1]] == [0, 1]).all())
 
         for n in negatives:
-            self.assertEqual(-1, adj_matrix[n[0], n[1]])
+            self.assertTrue((adj_matrix[n[0], n[1]] == [1, 0]).all())
 
         # zero elsewhere
         for i in range(len(adj_matrix)):
             for j in range(len(adj_matrix[i])):
                 if (i, j) not in positives and (i, j) not in negatives:
-                    self.assertEqual(0, adj_matrix[i, j])
+                    self.assertTrue((adj_matrix[i, j] == [0, 0]).all() )
 
     def test_encode_ordered(self):
         env = SATEnvStatic([[-1, -2], [2], [2, -3, -4]])
 
-        expected_matrix = np.zeros((4, 3))  # 4 vars and 3 clauses
-        expected_matrix[0, 0] = -1  # -1 on 1st clause
-        expected_matrix[1, 0] = -1  # -2 on 1st clause
-        expected_matrix[1, 1] = 1  # 2 on 2nd clause
-        expected_matrix[1, 2] = 1  # 2 on 3rd clause
-        expected_matrix[2, 2] = -1  # -3 on 3rd clause
-        expected_matrix[3, 2] = -1  # -4 on 3rd clause
+        expected_matrix = np.zeros((4, 3, 2))  # 4 vars and 3 clauses
+        expected_matrix[0, 0] = [1, 0]  # -1 on 1st clause
+        expected_matrix[1, 0] = [1, 0]  # -2 on 1st clause
+        expected_matrix[1, 1] = [0, 1]  # 2 on 2nd clause
+        expected_matrix[1, 2] = [0, 1]  # 2 on 3rd clause
+        expected_matrix[2, 2] = [1, 0]  # -3 on 3rd clause
+        expected_matrix[3, 2] = [1, 0]  # -4 on 3rd clause
 
         actual = env.encode_state()
         self.assertTrue((expected_matrix == actual).all())
@@ -54,8 +54,8 @@ class TestSATEnv(unittest.TestCase):
         # changes internal state to a new one (representing unit propagation on 2
         env.state = SATState([[-1]])
 
-        expected_matrix = np.zeros((4, 3))  # original formula has 4 vars and 3 clauses
-        expected_matrix[0, 0] = -1  # -1 on 1st clause
+        expected_matrix = np.zeros((4, 3, 2))  # original formula has 4 vars and 3 clauses
+        expected_matrix[0, 0] = [1, 0]  # -1 on 1st clause
         actual = env.encode_state()
         self.assertEqual(expected_matrix.shape, actual.shape)
         self.assertTrue((expected_matrix == actual).all(), msg=f'exp=\n{expected_matrix}\n actual=\n{actual}')
@@ -63,13 +63,13 @@ class TestSATEnv(unittest.TestCase):
     def test_encode_changing_state(self):
         clauses = [[-7, -3, 5], [-1, -5], [5]]
 
-        expected_matrix = np.zeros((7, 3))  # static satgame considers #vars as the max in the formula
-        expected_matrix[0, 0] = -1  # -7 on 1st clause
-        expected_matrix[1, 0] = -1  # -3 on 1st clause
-        expected_matrix[2, 0] = 1  # 5 on 1st clause
-        expected_matrix[3, 1] = -1  # -1 on 2nd clause
-        expected_matrix[2, 1] = -1  # -5 on 2nd clause
-        expected_matrix[2, 2] = 1  # 5 on 3rd clause
+        expected_matrix = np.zeros((7, 3, 2))  # static satgame considers #vars as the max in the formula
+        expected_matrix[0, 0] = [1,0]  # -7 on 1st clause
+        expected_matrix[1, 0] = [1,0]  # -3 on 1st clause
+        expected_matrix[2, 0] = [0,1]  # 5 on 1st clause
+        expected_matrix[3, 1] = [1,0]  # -1 on 2nd clause
+        expected_matrix[2, 1] = [1,0]  # -5 on 2nd clause
+        expected_matrix[2, 2] = [0,1]  # 5 on 3rd clause
         actual = SATEnvStatic(clauses).encode_state()
         self.assertEqual(expected_matrix.shape, actual.shape)
         self.assertTrue((expected_matrix == actual).all())
@@ -97,8 +97,8 @@ class TestSATEnv(unittest.TestCase):
         exp_model[1] = 1
 
         # resulting original_clauses has a single clause ([-1])
-        expected_matrix = np.zeros((4, 3))
-        expected_matrix[0, 0] = -1  # -1 on 1st clause
+        expected_matrix = np.zeros((4, 3, 2))
+        expected_matrix[0, 0] = [1,0]  # -1 on 1st clause
         obs, reward, done, info = env.step(env.encode_action(2, True))
 
         self.assertTrue((expected_matrix == obs).all(), f'exp={expected_matrix}, \nactual=\n{obs}')
@@ -119,7 +119,7 @@ class TestSATEnv(unittest.TestCase):
 
         # now, I'll try to set 1 to False and I'll be done with reward 1
         obs, reward, done, info = env.step(env.encode_action(1, False))
-        expected_matrix = np.zeros((4, 3))
+        expected_matrix = np.zeros((4, 3, 2))
         exp_model[0] = -1
         self.assertTrue((expected_matrix == obs).all())
         self.assertEqual([], info['clauses'])

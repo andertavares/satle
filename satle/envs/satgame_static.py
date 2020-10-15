@@ -82,9 +82,11 @@ class SATEnvStatic(gym.Env):
         self.action_space = spaces.Discrete(2 * self.n_vars)
 
         # obs space the adjacency matrix of the factor graph
-        # adj matrix is a vars x original_clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
+        # adj matrix is a vars x original_clauses x 2 tensor
+        # position v,c contains  [0,0], [1,0], [0,1] if
+        # variable v is absent, negated, asserted in clause c (i.e. one-hot encoding)
         # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(self.n_vars, len(self.original_clauses)), dtype=np.int8),
+        self.observation_space = spaces.Box(low=0, high=1, shape=(self.n_vars, len(self.original_clauses), 2), dtype=np.uint8),
 
         self.state = None  # is initialized at reset
         self.reset()
@@ -107,26 +109,26 @@ class SATEnvStatic(gym.Env):
 
     def encode_state(self):
         """
-        Encodes the state as a factor graph and returns the dense
+        Encodes the state as a factor graph and returns the
         adjacency matrix, with one node per variable and per clause
         Edges are between vars & original_clauses:
-        - positive edge (+1) if var is asserted in clause
-        - negative edge (-1) if var is negated in clause
-        - no edge (0) if var is not present in clause
+        - positive edge [0,1] if var is asserted in clause
+        - negative edge [1,0] if var is negated in clause
+        - no edge [0,0] if var is not present in clause
         Variable indexes in the clauses are according to their occurence.
         E.g., if clauses is: [[-5, 1], [2, -7, 5]] then the index of
         variables 5,1,2,7 become 0,1,2,3 respectively.
-        :return: np.array with the adjacency matrix (#vars x #clauses), with 0,+1,-1 for absent/asserted/negated var in clause
+        :return: np.array with the adjacency matrix (#vars x #clauses x 2), with [0,0], [1,0], [0,1] in position v,c if variable v is absent/asserted/negated in clause c
         """
 
         # maps each variable to its index in the matrix
         var_to_idx, _ = vars_and_indices(self.original_clauses)
-        adj = np.zeros((self.n_vars, len(self.original_clauses)))  # n x c adjacency matrix (n=#vars, c=#original_clauses)
+        adj = np.zeros((self.n_vars, len(self.original_clauses), 2))  # n x c x 2 tensor (n=#vars, c=#original_clauses)
 
         for c_num, clause in enumerate(self.state.clauses):
             for literal in clause:
                 var_idx = var_to_idx[abs(literal)]
-                adj[var_idx][c_num] = -1 if literal < 0 else 1
+                adj[var_idx][c_num] = [1, 0] if literal < 0 else [0, 1]
 
         return adj
 
@@ -193,7 +195,7 @@ class SATEnvStatic(gym.Env):
 
     def render(self, mode='human'):
         print('#vars', self.state.original_clauses.nv)
-        print('original_clauses', self.state.original_clauses.original_clauses)
+        print('original_clauses', self.state.original_clauses)
         print('model', self.state.model)
         print(f'sat={self.state.is_sat()}, unsat={self.state.is_unsat()}')
         print(self.encode_state())
