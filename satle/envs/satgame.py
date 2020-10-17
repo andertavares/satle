@@ -49,26 +49,25 @@ class SATState:
     def encode(self):
         """
         Encodes the state as a factor graph and returns the dense
-        adjacency matrix, with one node per variable and per clause
-        Edges are between vars & original_clauses:
-        - positive edge (+1) if var is asserted in clause
-        - negative edge (-1) if var is negated in clause
-        - no edge (0) if var is not present in clause
+        v x c x 2 tensor representing the graph, where v is #variables and c is
+        #clauses. Entry i,j contains:
+        - positive edge [0,1] if var i is asserted in clause j
+        - negative edge [1,0] if var i is negated in clause j
+        - no edge [0,0] if var i is not present in clause j
         Variable indexes in the clauses are according to their occurence.
         E.g., if clauses is: [[-5, 1], [2, -7, 5]] then the index of
         variables 5,1,2,7 become 0,1,2,3 respectively.
-        :return: np.array with the adjacency matrix (#vars x #clauses), with +1/-1 for asserted/negated var in clause and 0
-        if var not present in clause
+        :return: np.array with the representation matrix (v x c x 2)
         """
 
         # maps each variable to its index in the matrix
         var_to_idx, _ = vars_and_indices(self.clauses)
-        adj = np.zeros((len(var_to_idx), len(self.clauses)))  # n x c adjacency matrix (n=#vars, c=#original_clauses)
+        adj = np.zeros((len(var_to_idx), len(self.clauses), 2), dtype=np.uint8)  # v x c x 2 tensor matrix (v=#vars, c=#clauses)
 
         for c_num, clause in enumerate(self.clauses):
             for literal in clause:
                 var_idx = var_to_idx[abs(literal)]
-                adj[var_idx][c_num] = -1 if literal < 0 else 1
+                adj[var_idx][c_num] = [1,0] if literal < 0 else [0,1]
 
         return adj
 
@@ -101,10 +100,11 @@ class SATEnv(gym.Env):
         # 2 actions per variable (assign True or False to it)
         self.action_space = spaces.Discrete(2 * self.n_vars)
 
-        # obs space the adjacency matrix of the factor graph
-        # adj matrix is a vars x original_clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
+        # obs space is the v x c x 2 tensor representing of the factor graph
+        # where v=#vars, c=#caluses. Entry i,j contains:
+        # [0,0]/[1,0]/[0,1] if var i is absent/negated/asserted in clause j
         # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(self.n_vars, len(self.original_clauses)), dtype=np.int8),
+        self.observation_space = spaces.Box(low=0, high=1, shape=(self.n_vars, len(self.original_clauses), 2), dtype=np.uint8),
 
         self.state = None  # is initialized at reset
         self.reset()
@@ -179,7 +179,7 @@ class SATEnv(gym.Env):
         # updates action and observation spaces
         self.action_space = spaces.Discrete(2 * self.state.n_vars)
         self.observation_space = spaces.Box(
-            low=-1, high=1, shape=(self.state.n_vars, len(self.state.clauses)), dtype=np.int8
+            low=0, high=1, shape=(self.state.n_vars, len(self.state.clauses), 2), dtype=np.uint8
         )
 
         obs = self.state.encode()
@@ -196,7 +196,7 @@ class SATEnv(gym.Env):
         self.var_to_idx, self.idx_to_var = vars_and_indices(self.original_clauses)
         self.action_space = spaces.Discrete(2 * self.n_vars)
         self.observation_space = spaces.Box(
-            low=-1, high=1, shape=(self.n_vars, len(self.original_clauses)), dtype=np.int8
+            low=0, high=1, shape=(self.n_vars, len(self.original_clauses), 2), dtype=np.uint8
         )
         self.state = SATState(self.original_clauses)
         return self.state.encode()
