@@ -14,7 +14,7 @@ class LocalSearchSAT(gym.Env):
     """
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, clauses):
+    def __init__(self, clauses, seed=None):
         """
 
         :param clauses: a satisfiable original_clauses
@@ -24,7 +24,10 @@ class LocalSearchSAT(gym.Env):
         self.original_clauses = clauses
         self.n_vars = num_vars(clauses)
 
-        # map and reverse map of DIMCAS variable to index in factor graph
+        # if seed is not None, every reset will restore the formula to the same initial state
+        self.seed = seed
+
+        # map and reverse map of DIMACS variable to index in factor graph
         self.var_to_idx, self.idx_to_var = vars_and_indices(self.original_clauses)
 
         # literals is a list: [1,...,n_vars, -1,...,-n_vars] (DIMACS notation without zero)
@@ -33,11 +36,13 @@ class LocalSearchSAT(gym.Env):
         # 1 actions per variable (flip it)
         self.action_space = spaces.Discrete(self.n_vars)
 
-        # obs space the adjacency matrix of the factor graph
-        # adj matrix is a vars x original_clauses matrix with 0,-1,+1 if var is absent, negated, asserted in clause
+        # obs space contains the factor graph representation matrix and the model
+        # matrix is a vars x clauses x 2 matrix with entry i,j  = [0,0],[1,0],[0,1] if
+        # var i is absent, negated, asserted in clause j.
+        # model is an array with 0,-1,1 if var is unassigned, False or True in the solution
         # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
         self.observation_space = spaces.Dict({
-            'graph': spaces.Box(low=-1, high=1, shape=(self.n_vars, len(self.original_clauses)), dtype=np.int8),
+            'graph': spaces.Box(low=0, high=1, shape=(self.n_vars, len(self.original_clauses), 2), dtype=np.uint8),
             'model': spaces.Box(low=-1, high=1, shape=(self.n_vars,), dtype=np.int8)
         })
 
@@ -76,28 +81,27 @@ class LocalSearchSAT(gym.Env):
 
     def encode_state(self):
         """
-        Encodes the state as a factor graph and returns the dense
-        adjacency matrix, with one node per variable and per clause
-        Edges are between vars & original_clauses:
-        - positive edge (+1) if var is asserted in clause
-        - negative edge (-1) if var is negated in clause
-        - no edge (0) if var is not present in clause
+        Encodes the state as a factor graph and returns a v x c x 2
+        representation matrix.
+        Position i,j of the matrix contains
+        - positive edge [0,1] if var i is asserted in clause j
+        - negative edge [1,0] if var i is negated in clause j
+        - no edge [0,0] if var i is not present in clause j
         Variable indexes in the clauses are according to their occurence.
         E.g., if clauses is: [[-5, 1], [2, -7, 5]] then the index of
         variables 5,1,2,7 become 0,1,2,3 respectively.
-        :return: np.array with the adjacency matrix (#vars x #clauses), with +1/-1 for asserted/negated var in clause and 0
-        if var not present in clause
+        :return: np.array with the adjacency matrix (#vars x #clauses x 2), with [0,0], [1,0], [0,1] in position v,c if variable v is absent/asserted/negated in clause c
         """
 
-        # maps each variable to its index in the matrix
-        adj = np.zeros((len(self.var_to_idx), len(self.original_clauses)))  # n x c adjacency matrix (n=#vars, c=#original_clauses)
+        # v x c x 2 tensor (v=#vars, c=#clauses)
+        repr = np.zeros((len(self.var_to_idx), len(self.original_clauses), 2), dtype=np.uint8)
 
         for c_num, clause in enumerate(self.original_clauses):
             for literal in clause:
                 var_idx = self.var_to_idx[abs(literal)]
-                adj[var_idx][c_num] = -1 if literal < 0 else 1
+                repr[var_idx][c_num] = [1,0] if literal < 0 else [0,1]
 
-        return {'graph': adj, 'model': self.model}
+        return {'graph': repr, 'model': self.model}
 
     def step(self, action):
         """
@@ -135,7 +139,10 @@ class LocalSearchSAT(gym.Env):
         :return:
         """
 
-        # each position stores the value of a variable: 0,1,-1 for unassigned,True,False
+        # if seed is not None, will generate the same model everytime reset is called
+        if self.seed is not None:
+            np.random.seed(self.seed)
+        # each position of the model stores the value of a variable: 0,1,-1 for unassigned,True,False
         # starts with a random model
         self.model = np.array(np.random.choice([-0, 1], 5), dtype=np.uint8)
         return self.encode_state()
