@@ -45,17 +45,17 @@ def decode(adj_tensor, model):
     raise NotImplementedError
 
 
-def unit_propagation(clauses, var, signal):
+def unit_propagation(clauses, var_idx, signal):
     """
     Performs unit propagation of a literal (=var*signal) in the original_clauses.
     That is, removes all original_clauses with literal and removes ~literal from the original_clauses it occurs
     :param clauses:
-    :param var: variable to be propagated
+    :param var_idx: index of the variable to be propagated (starts with zero)
     :param signal: +1 if var is assigned True, -1 if False
     :return:
     """
     new_clauses = deepcopy(clauses)
-    literal = (var+1)*signal  # brings to DIMACS notation
+    literal = (var_idx + 1) * signal  # brings to DIMACS notation
 
     # removes original_clauses with literal
     occurrences = [literal not in c for c in new_clauses]  # creates an array mask to keep original_clauses without literal

@@ -30,38 +30,35 @@ class LocalSearchSAT(gym.Env):
         # map and reverse map of DIMACS variable to index in factor graph
         self.var_to_idx, self.idx_to_var = vars_and_indices(self.original_clauses)
 
-        # literals is a list: [1,...,n_vars, -1,...,-n_vars] (DIMACS notation without zero)
-        self.literals = list(range(1, self.n_vars + 1)) + list(range(-1, -self.n_vars - 1, -1))
-
         # 1 actions per variable (flip it)
         self.action_space = spaces.Discrete(self.n_vars)
 
-        # obs space contains the factor graph representation matrix and the model
+        # obs space contains the factor graph representation matrix and variable values
         # matrix is a vars x clauses x 2 matrix with entry i,j  = [0,0],[1,0],[0,1] if
         # var i is absent, negated, asserted in clause j.
-        # model is an array with -1,1 if var is False or True in the solution (0 is invalid)
+        # values is an array with -1,1 if var is False or True in the solution (0 is invalid)
         # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
         self.observation_space = spaces.Dict({
             'graph': spaces.Box(low=0, high=1, shape=(self.n_vars, len(self.original_clauses), 2), dtype=np.uint8),
-            'model': spaces.Box(low=-1, high=1, shape=(self.n_vars,), dtype=np.int8)
+            'values': spaces.Box(low=-1, high=1, shape=(self.n_vars,), dtype=np.int8)
         })
 
-        # model is initialized at reset
-        self.model = None
+        # values are initialized at reset
+        self.values = None
         self.reset()
 
-    def apply_model(self):
+    def apply_values(self):
         """
-        Applies the model (current tentative solution)
+        Applies the values (current tentative solution)
         to the original formula and returns the resulting formula
         :return:list(list(int))
         """
         # easiest way: unit propagate the model's assignments
-        formula = self.original_clauses
-        for idx, value in enumerate(self.model):
-            if value == 0:  # skips free (unassigned) variables
-                continue
-            formula = unit_propagation(formula, self.idx_to_var[idx], value == 1)
+        formula = deepcopy(self.original_clauses)
+        for idx, value in enumerate(self.values):
+            if value != 0:  # skips free (unassigned) variables
+                var = self.idx_to_var[idx]-1  # unit_prop method variable counting is 0-based
+                formula = unit_propagation(formula, var, value)
         return formula
 
     def is_sat_state(self):
@@ -70,7 +67,7 @@ class LocalSearchSAT(gym.Env):
         :return:
         """
         # if unit-propagating the assignments made the formula empty, it is a satisfying one
-        return len(self.apply_model()) == 0
+        return len(self.apply_values()) == 0
 
     def reward(self):
         """
@@ -101,7 +98,7 @@ class LocalSearchSAT(gym.Env):
                 var_idx = self.var_to_idx[abs(literal)]
                 repr[var_idx][c_num] = [1,0] if literal < 0 else [0,1]
 
-        return {'graph': repr, 'model': self.model}
+        return {'graph': repr, 'values': self.values}
 
     def step(self, action):
         """
@@ -116,17 +113,17 @@ class LocalSearchSAT(gym.Env):
         # in an attempt to assign a value to a non-free variable
         if not self.action_space.contains(action):
             obs = self.encode_state()
-            info = {'clauses': self.apply_model()}
+            info = {'clauses': self.apply_values()}
             return obs, self.reward(), self.is_sat_state(), info
 
         # flips the corresponding bit
-        self.model[action] = -self.model[action]
+        self.values[action] = -self.values[action]
 
         # creates new original_clauses with the result of adding the corresponding literal to the previous
         # new_clauses = unit_propagation(self.state.clauses, var_idx, var_sign)
 
         obs = self.encode_state()
-        info = {'clauses': self.apply_model()}
+        info = {'clauses': self.apply_values()}
         return obs, self.reward(), self.is_sat_state(), info
 
     def reset(self):
@@ -140,16 +137,16 @@ class LocalSearchSAT(gym.Env):
             np.random.seed(self.seed)
         # each position of the model stores 1 or -1 for True or False assignment to the var
         # starts with a random unsatisfying model
-        self.model = np.array(np.random.choice([-1, 1], self.n_vars), dtype=np.int8)
+        self.values = np.array(np.random.choice([-1, 1], self.n_vars), dtype=np.int8)
         while self.is_sat_state():  # repeats the assignment until unsat
-            self.model = np.array(np.random.choice([-1, 1], self.n_vars), dtype=np.int8)
+            self.values = np.array(np.random.choice([-1, 1], self.n_vars), dtype=np.int8)
 
         return self.encode_state()
 
     def render(self, mode='human'):
         print('#vars', self.action_space.n)
-        print('clauses', self.apply_model())
-        print('model', self.model)
+        print('clauses', self.apply_values())
+        print('values', self.values)
         print(f'sat={self.is_sat_state()}')
         print(self.encode_state())
 

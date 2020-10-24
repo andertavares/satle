@@ -45,12 +45,31 @@ class TestSATEnv(unittest.TestCase):
     def test_step_flips_correct_var(self):
         f = CNF(from_clauses=[[-1, -2], [2], [2, -3, -4]])
         env = LocalSearchSAT(f.clauses)
-        exp_model = np.copy(env.model)
+        exp_model = np.copy(env.values)
         # flips the first var in the expected model and compares if it is equal to the environment's
         obs, reward, done, info = env.step(0)
         exp_model[0] = -exp_model[0]
-        self.assertTrue((exp_model == obs['model']).all(), f'exp=\n{exp_model}\nactual=\n{obs["model"]}')
+        self.assertTrue((exp_model == obs['values']).all(), f'exp=\n{exp_model}\nactual=\n{obs["values"]}')
 
+    def test_idx_to_var(self):
+        """
+        Tests whether the idx_to_var array works inside LocalSearchSAT env
+        :return:
+        """
+        f = [[-1, -2], [2], [-3, -4]]
+        env = LocalSearchSAT(f)
+        self.assertEqual(1, env.idx_to_var[0])
+        self.assertEqual(2, env.idx_to_var[1])
+        self.assertEqual(3, env.idx_to_var[2])
+        self.assertEqual(4, env.idx_to_var[3])
+
+    def test_apply_values(self):
+        f = [[-1, -2], [2], [-3, -4]]
+        values = np.array([1, -1, 1, -1])
+        env = LocalSearchSAT(f)
+        env.values = np.copy(values)
+
+        self.assertEqual([[]], env.apply_values())
 
     def test_step(self):
         f = CNF(from_clauses=[[-1, -2], [2], [-3, -4]])
@@ -68,8 +87,8 @@ class TestSATEnv(unittest.TestCase):
 
         # forces a model because it is otherwise randomly initiated
         test_values = np.array([1, -1, 1, 1])  # T,F,T,T
-        env.model = np.copy(test_values)
-        self.assertTrue((test_values == env.model).all(), f'model: {env.model}')
+        env.values = np.copy(test_values)
+        self.assertTrue((test_values == env.values).all(), f'model: {env.values}')
 
 
         # will flip variable 2 (index=1), its expected value is 1
@@ -77,8 +96,8 @@ class TestSATEnv(unittest.TestCase):
         # resulting formula is [[1],[-3,-4]], but representation is based on the original
         obs, reward, done, info = env.step(1)
         self.assertTrue((expected_matrix == obs['graph']).all(), f'exp={expected_matrix}, \nactual=\n{obs["graph"]}')
-        #self.assertEqual([[], []], info['clauses'])
-        self.assertTrue((test_values == obs['model']).all(), f'exp={test_values}, actual={obs["model"]}')
+        self.assertEqual([[], []], info['clauses'])
+        self.assertTrue((test_values == obs['values']).all(), f'exp={test_values}, actual={obs["values"]}')
         self.assertEqual(0, reward)
         self.assertFalse(done)
         self.assertEqual(4, env.action_space.n)  # action space does not change
@@ -88,17 +107,17 @@ class TestSATEnv(unittest.TestCase):
         # resulting formula is [[]]
         obs, reward, done, info = env.step(0)
         self.assertTrue((expected_matrix == obs['graph']).all(), f'exp={expected_matrix}, \nactual=\n{obs["graph"]}')
-        #self.assertEqual([[]], info['clauses'])
-        self.assertTrue((test_values == obs['model']).all(), f'exp={test_values}, actual={obs["model"]}')
+        self.assertEqual([[]], info['clauses'])
+        self.assertTrue((test_values == obs['values']).all(), f'exp={test_values}, actual={obs["values"]}')
         self.assertEqual(0, reward)
         self.assertFalse(done)
 
-        # now flips variable 4 (index=3), this will solve the formula
-        test_values[3] = -1  # [-1,
+        # now flips variable 4 (index=3), this will solve the formula (model=[-1,1,1,-1]
+        test_values[3] = -1
         obs, reward, done, info = env.step(3)
         self.assertTrue((expected_matrix == obs['graph']).all(), f'exp={expected_matrix}, \nactual=\n{obs["graph"]}')
-        #self.assertEqual([], info['clauses'])
-        self.assertTrue((test_values == obs['model']).all(), f'exp={test_values}, actual={obs["model"]}')
+        self.assertEqual([], info['clauses'])
+        self.assertTrue((test_values == obs['values']).all(), f'exp={test_values}, actual={obs["values"]}')
         self.assertEqual(1, reward)
         self.assertTrue(done)
 
