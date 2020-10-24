@@ -39,7 +39,7 @@ class LocalSearchSAT(gym.Env):
         # obs space contains the factor graph representation matrix and the model
         # matrix is a vars x clauses x 2 matrix with entry i,j  = [0,0],[1,0],[0,1] if
         # var i is absent, negated, asserted in clause j.
-        # model is an array with 0,-1,1 if var is unassigned, False or True in the solution
+        # model is an array with -1,1 if var is False or True in the solution (0 is invalid)
         # more info on gym spaces: https://github.com/openai/gym/tree/master/gym/spaces
         self.observation_space = spaces.Dict({
             'graph': spaces.Box(low=0, high=1, shape=(self.n_vars, len(self.original_clauses), 2), dtype=np.uint8),
@@ -112,10 +112,6 @@ class LocalSearchSAT(gym.Env):
         :return:observation,reward,done,info
         """
 
-        # flips the value of a variable according to the action
-        # index is zero-based where literal is 1-based; assigned value is the literal signal
-        var_idx = action - 1
-
         # returns data for this unchanged state if action is out of range or
         # in an attempt to assign a value to a non-free variable
         if not self.action_space.contains(action):
@@ -124,7 +120,7 @@ class LocalSearchSAT(gym.Env):
             return obs, self.reward(), self.is_sat_state(), info
 
         # flips the corresponding bit
-        self.model[var_idx] = -self.model[var_idx]
+        self.model[action] = -self.model[action]
 
         # creates new original_clauses with the result of adding the corresponding literal to the previous
         # new_clauses = unit_propagation(self.state.clauses, var_idx, var_sign)
@@ -142,9 +138,12 @@ class LocalSearchSAT(gym.Env):
         # if seed is not None, will generate the same model everytime reset is called
         if self.seed is not None:
             np.random.seed(self.seed)
-        # each position of the model stores the value of a variable: 0,1,-1 for unassigned,True,False
-        # starts with a random model
-        self.model = np.array(np.random.choice([-0, 1], 5), dtype=np.uint8)
+        # each position of the model stores 1 or -1 for True or False assignment to the var
+        # starts with a random unsatisfying model
+        self.model = np.array(np.random.choice([-1, 1], self.n_vars), dtype=np.int8)
+        while self.is_sat_state():  # repeats the assignment until unsat
+            self.model = np.array(np.random.choice([-1, 1], self.n_vars), dtype=np.int8)
+
         return self.encode_state()
 
     def render(self, mode='human'):

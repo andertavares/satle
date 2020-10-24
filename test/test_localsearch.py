@@ -45,62 +45,62 @@ class TestSATEnv(unittest.TestCase):
     def test_step_flips_correct_var(self):
         f = CNF(from_clauses=[[-1, -2], [2], [2, -3, -4]])
         env = LocalSearchSAT(f.clauses)
-        obs = env.reset()
-        exp_model = np.copy(obs['model'])
+        exp_model = np.copy(env.model)
         # flips the first var in the expected model and compares if it is equal to the environment's
         obs, reward, done, info = env.step(0)
         exp_model[0] = -exp_model[0]
         self.assertTrue((exp_model == obs['model']).all(), f'exp=\n{exp_model}\nactual=\n{obs["model"]}')
 
 
-
-
     def test_step(self):
-        f = CNF(from_clauses=[[-1, -2], [2], [2, -3, -4]])
+        f = CNF(from_clauses=[[-1, -2], [2], [-3, -4]])
 
         env = LocalSearchSAT(f.clauses)
+        expected_matrix = np.zeros((4, 3, 2))  # 4 vars x 3 clauses
+        expected_matrix[0, 0] = [1, 0]  # -1 on 1st clause
+        expected_matrix[1, 0] = [1, 0]  # -2 on 1st clause
+        expected_matrix[1, 1] = [0, 1]  # 2 on 2nd clause
+        expected_matrix[2, 2] = [1, 0]  # -3 on 3rd clause
+        expected_matrix[3, 2] = [1, 0]  # -4 on 3rd clause
+        obs = env.reset()
+        self.assertTrue((expected_matrix == obs['graph']).all(), f'exp={expected_matrix}, \nactual=\n{obs["graph"]}')
+        self.assertEqual([[-1, -2], [2], [-3, -4]], env.original_clauses)
 
         # forces a model because it is otherwise randomly initiated
+        test_values = np.array([1, -1, 1, 1])  # T,F,T,T
+        env.model = np.copy(test_values)
+        self.assertTrue((test_values == env.model).all(), f'model: {env.model}')
 
-        # that's how two np arrays should be compared for equality...
-        self.assertTrue((np.zeros(f.nv) == env.model).all(), f'model: {env.model}')
-        self.assertEqual([[-1, -2], [2], [2, -3, -4]], env.state.clauses)
 
-        # will add variable 2 (index=1) to solution with positive value
-        exp_model = np.zeros(f.nv)
-        exp_model[1] = 1
-
-        # resulting original_clauses has a single clause ([-1])
-        expected_matrix = np.zeros((4, 3, 2))
-        expected_matrix[0, 0] = [1,0]  # -1 on 1st clause
-        obs, reward, done, info = env.step(env.encode_action(2, True))
-
-        self.assertTrue((expected_matrix == obs).all(), f'exp={expected_matrix}, \nactual=\n{obs}')
-        self.assertEqual([[-1]], info['clauses'])
-        self.assertTrue((exp_model == info['model']).all(), f'exp={exp_model}, actual={info["model"]}')
+        # will flip variable 2 (index=1), its expected value is 1
+        test_values[1] = 1
+        # resulting formula is [[1],[-3,-4]], but representation is based on the original
+        obs, reward, done, info = env.step(1)
+        self.assertTrue((expected_matrix == obs['graph']).all(), f'exp={expected_matrix}, \nactual=\n{obs["graph"]}')
+        #self.assertEqual([[], []], info['clauses'])
+        self.assertTrue((test_values == obs['model']).all(), f'exp={test_values}, actual={obs["model"]}')
         self.assertEqual(0, reward)
-        self.assertEqual(False, done)
-        self.assertEqual(8, env.action_space.n)  # action space does not change
+        self.assertFalse(done)
+        self.assertEqual(4, env.action_space.n)  # action space does not change
 
-        # performing an invalid action keeps the environment at its previous state
-        obs, reward, done, info = env.step(8)  # valid actions are 0..7 only
-        self.assertTrue((expected_matrix == obs).all())
-        self.assertEqual([[-1]], info['clauses'])
-        self.assertTrue((exp_model == info['model']).all(), f'exp={exp_model}, actual={info["model"]}')
+        # will flip variable 1 (index=0), its expected value is -1
+        test_values[0] = -1
+        # resulting formula is [[]]
+        obs, reward, done, info = env.step(0)
+        self.assertTrue((expected_matrix == obs['graph']).all(), f'exp={expected_matrix}, \nactual=\n{obs["graph"]}')
+        #self.assertEqual([[]], info['clauses'])
+        self.assertTrue((test_values == obs['model']).all(), f'exp={test_values}, actual={obs["model"]}')
         self.assertEqual(0, reward)
-        self.assertEqual(False, done)
-        self.assertEqual(8, env.action_space.n)
+        self.assertFalse(done)
 
-        # now, I'll try to set 1 to False and I'll be done with reward 1
-        obs, reward, done, info = env.step(env.encode_action(1, False))
-        expected_matrix = np.zeros((4, 3, 2))
-        exp_model[0] = -1
-        self.assertTrue((expected_matrix == obs).all())
-        self.assertEqual([], info['clauses'])
-        self.assertTrue((exp_model == info['model']).all(), f'exp={exp_model}, actual={info["model"]}')
+        # now flips variable 4 (index=3), this will solve the formula
+        test_values[3] = -1  # [-1,
+        obs, reward, done, info = env.step(3)
+        self.assertTrue((expected_matrix == obs['graph']).all(), f'exp={expected_matrix}, \nactual=\n{obs["graph"]}')
+        #self.assertEqual([], info['clauses'])
+        self.assertTrue((test_values == obs['model']).all(), f'exp={test_values}, actual={obs["model"]}')
         self.assertEqual(1, reward)
-        self.assertEqual(True, done)
-        self.assertEqual(8, env.action_space.n)
+        self.assertTrue(done)
 
 
 if __name__ == '__main__':
