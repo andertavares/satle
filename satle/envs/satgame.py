@@ -72,7 +72,7 @@ class SATState:
         return adj
 
 
-class SATEnv(gym.Env):
+class SATGame(gym.Env):
     """
     SAT gym environment. The goal is to find a solution to the
     original_clauses, preferably with the least number of steps (variable assignments).
@@ -85,7 +85,7 @@ class SATEnv(gym.Env):
 
         :param clauses: a satisfiable original_clauses
         """
-        super(SATEnv, self).__init__()
+        super(SATGame, self).__init__()
         self.original_clauses = clauses
         self.n_vars = num_vars(self.original_clauses)  # fixed throughout execution
 

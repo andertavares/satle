@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from pysat.formula import CNF
 
-from satle.envs.satgame import SATEnv, SATState
+from satle.envs.satgame import SATGame, SATState
 
 
 class TestSATState(unittest.TestCase):
@@ -66,7 +66,7 @@ class TestSATEnv(unittest.TestCase):
     # TODO write a test var_and_signal after state changes
 
     def test_encode_action(self):
-        env = SATEnv([[-1, -2], [2], [2, -3, -4]])
+        env = SATGame([[-1, -2], [2], [2, -3, -4]])
 
         for idx in range(0, 4):  # true assignments
             self.assertEqual(idx, env.encode_action(idx+1, True), msg=f'expected={idx}')
@@ -77,7 +77,7 @@ class TestSATEnv(unittest.TestCase):
     def test_step(self):
         f = CNF(from_clauses=[[-1, -2], [2], [2, -3, -4]])
 
-        env = SATEnv(f.clauses)
+        env = SATGame(f.clauses)
         initial_state = env.state  #env.reset()
 
         # that's how two np arrays should be compared for equality...
