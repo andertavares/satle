@@ -1,7 +1,40 @@
+import os
+import subprocess
 from collections import OrderedDict
 from itertools import compress
 import numpy as np
 from copy import deepcopy
+from pysat.formula import CNF
+
+
+def create_sat_problem(problem, sat_required, *args):
+    """
+    Creates a new instance of a SAT problem and returns the list of clauses.
+    :param sat_required: is the problem instance required to be satisfiable?
+    :param problem:
+    :param args: list of arguments as if cnfgen is being called from the command line
+    :return:
+    """
+    # calls cnfgen to generate an instance
+    subprocess.call(['cnfgen', '-q', '-o', 'tmp.cnf'] + list(args))
+    if not sat_required:
+        f = CNF(from_file='tmp.cnf')
+        os.remove('tmp.cnf')
+        return f.clauses
+
+    else:  # the instance must be satisfiable, will check with minisat
+        while True:
+            try:
+                subprocess.check_call(['minisat', 'tmp.cnf'], stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as ex:
+                if ex.returncode == 10:  # instance is satisfiable, return it
+                    f = CNF(from_file='tmp.cnf')
+                    os.remove('tmp.cnf')
+                    return f.clauses
+                else:
+                    # generates a new instance
+                    subprocess.call(['cnfgen', '-q', '-o', 'tmp.cnf', problem] + args)
+
 
 
 def vars_and_indices(clauses):
