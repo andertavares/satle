@@ -7,16 +7,15 @@ from copy import deepcopy
 from pysat.formula import CNF
 
 
-def create_sat_problem(problem, sat_required, *args):
+def create_sat_problem(sat_required, *args):
     """
     Creates a new instance of a SAT problem and returns the list of clauses.
     :param sat_required: is the problem instance required to be satisfiable?
-    :param problem:
     :param args: list of arguments as if cnfgen is being called from the command line
     :return:
     """
     # calls cnfgen to generate an instance
-    subprocess.call(['cnfgen', '-q', '-o', 'tmp.cnf'] + list(args))
+    subprocess.call(['cnfgen', '-q', '-o', 'tmp.cnf'] + [str(a) for a in args])
     if not sat_required:
         f = CNF(from_file='tmp.cnf')
         os.remove('tmp.cnf')
@@ -33,7 +32,7 @@ def create_sat_problem(problem, sat_required, *args):
                     return f.clauses
                 else:
                     # generates a new instance
-                    subprocess.call(['cnfgen', '-q', '-o', 'tmp.cnf', problem] + args)
+                    subprocess.call(['cnfgen', '-q', '-o', 'tmp.cnf'] + args)
 
 
 
