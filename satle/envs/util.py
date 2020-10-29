@@ -2,9 +2,9 @@ import os
 import subprocess
 from collections import OrderedDict
 from itertools import compress
-import numpy as np
 from copy import deepcopy
 from pysat.formula import CNF
+from pysat.solvers import Solver
 
 
 def create_sat_problem(sat_required, *args):
@@ -15,25 +15,24 @@ def create_sat_problem(sat_required, *args):
     :return:
     """
     # calls cnfgen to generate an instance
-    subprocess.call(['cnfgen', '-q', '-o', 'tmp.cnf'] + [str(a) for a in args])
+    # TODO use cnfgen programatically, if possible
+    command_array = ['cnfgen', '-q', '-o', 'tmp.cnf'] + [str(a) for a in args]
+    subprocess.call(command_array)
+    f = CNF(from_file='tmp.cnf')
     if not sat_required:
-        f = CNF(from_file='tmp.cnf')
         os.remove('tmp.cnf')
         return f.clauses
 
-    else:  # the instance must be satisfiable, will check with minisat
+    else:  # the instance must be satisfiable, will check with Pysat's solver
         while True:
-            try:
-                subprocess.check_call(['minisat', 'tmp.cnf'], stderr=subprocess.STDOUT)
-            except subprocess.CalledProcessError as ex:
-                if ex.returncode == 10:  # instance is satisfiable, return it
-                    f = CNF(from_file='tmp.cnf')
+            with Solver(name='Glucose3', bootstrap_with=f.clauses) as solver:
+                if solver.solve():  # instance is satisfiable, return it
                     os.remove('tmp.cnf')
                     return f.clauses
                 else:
                     # generates a new instance
-                    subprocess.call(['cnfgen', '-q', '-o', 'tmp.cnf'] + args)
-
+                    subprocess.call(command_array)
+                    f = CNF(from_file='tmp.cnf')
 
 
 def vars_and_indices(clauses):
