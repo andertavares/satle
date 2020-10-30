@@ -1,7 +1,7 @@
 import gym
 from pysat.formula import CNF
 
-from .util import create_sat_problem
+from satle.envs import util
 
 
 class MultiSATEnv(gym.Env):
@@ -15,7 +15,7 @@ class MultiSATEnv(gym.Env):
     """
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, env_class, from_dataset=None, *problem_args):
+    def __init__(self, env_class, enforce_satisfiable=False, from_dataset=None, cnfgen_args=None):
         """
         This SAT env wraps a sub-environment such that at each
         reset, that environment is re-created with a new formula.
@@ -24,17 +24,22 @@ class MultiSATEnv(gym.Env):
         e.g. 3-CNFs on Gnp graphs.
 
         :param env_class: which environment is to be wrapped (e.g. SATGame, LocalSearchSAT, etc)
+        :param enforce_satisfiable: if not using a dataset, should generated formulas be satisfiable?
         :param from_dataset: list of .cnf DIMACS files to be used in this environment
-        :param problem_args: arguments required by cnfgen to generate problem instances
-        (must be passed as if cnfgen is being called from command line, e.g. 'kcolor', 3, 'gnp', 5, 0.5)
+        :param cnfgen_args: list of arguments required by cnfgen to generate problem instances
+        (must be ordered as if calling from command line e.g. ['kcolor', 3, 'gnp', 5, 0.5])
         """
         super(MultiSATEnv, self).__init__()
 
         self.env_class = env_class
-        self.problem_args = problem_args
+        self.cnfgen_args = cnfgen_args
         self.current_instance = None
+
         self.dataset = from_dataset
         self.dataset_index = 0
+
+        self.enforce_satisfiable = enforce_satisfiable
+
         self.action_space = None        # not defined until reset
         self.observation_space = None   # not defined until reset
 
@@ -59,7 +64,7 @@ class MultiSATEnv(gym.Env):
             if self.dataset_index >= len(self.dataset):  # wraps when reaches the end
                 self.dataset_index = 0
         else:
-            clauses = create_sat_problem(*self.problem_args)
+            clauses = util.create_sat_problem(self.enforce_satisfiable, *self.cnfgen_args)
 
         self.current_instance = self.env_class(clauses)
 
@@ -69,7 +74,7 @@ class MultiSATEnv(gym.Env):
         return obs
 
     def render(self, mode='human'):
-        print('Problem: ', self.problem_args)
+        print('Problem: ', self.cnfgen_args)
         self.current_instance.render()
 
     def close(self):
